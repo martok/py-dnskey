@@ -22,8 +22,10 @@ positional arguments:
 
       options:
         -r, --recurse         Show key for all zones below the given one
-        -s {PUB,ACT,INAC,DEL,FUT}, --state {PUB,ACT,INAC,DEL,FUT}
+        -s, --state {PUB,ACT,INAC,DEL,FUT}
                               Filter keys by current state
+        -t, --type {ZSK,KSK}
+                              Filter keys by type
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
       Move expired keys to archive location
