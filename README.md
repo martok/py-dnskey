@@ -1,0 +1,40 @@
+# dnskeytool
+
+Simple tool for DNSSEC key management.
+
+
+## Usage
+
+```
+usage: dnskeytool [-h] [--dir DIR] COMMAND ...
+
+options:
+  -h, --help  show this help message and exit
+  --dir DIR   directory containing key files
+
+positional arguments:
+  COMMAND
+    listkeys [-h] [-r] [-s {PUB,ACT,INAC,DEL,FUT}] ZONE
+      List currently active keys and their timing
+
+      positional arguments:
+        ZONE                  DNS zone to work on
+
+      options:
+        -r, --recurse         Show key for all zones below the given one
+        -s {PUB,ACT,INAC,DEL,FUT}, --state {PUB,ACT,INAC,DEL,FUT}
+                              Filter keys by current state
+
+    archive [-h] [-r] [-n] [--auto] ZONE TARGET
+      Move expired keys to archive location
+
+      positional arguments:
+        ZONE           DNS zone to work on
+        TARGET         Target path to move to
+
+      options:
+        -r, --recurse  Recursively acton zones below the given one
+        -n, --dry-run  Don't perform action, just show plan
+        --auto         Automatically append year of Inactive to TARGET
+
+```

@@ -1,0 +1,113 @@
+#!/usr/bin/env -S python3 -u
+import argparse
+import sys
+from pathlib import Path
+
+from dnssec import DnsSec
+
+
+def main_listkeys(tool: DnsSec, args: argparse.Namespace) -> int:
+    keys = tool.list_keys(args.ZONE, recursive=args.recurse)
+    if not args.recurse:
+        print("Zone: ", args.ZONE)
+    else:
+        print(f"{'Zone':64s} ", end="")
+    print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event'}")
+    for key in keys:
+        if args.state:
+            if key.state() != args.state:
+                continue
+        if args.recurse:
+            print(f"{key.zone:64s} ", end="")
+        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {key.next_change()}")
+    return 0
+
+
+def main_archive(tool: DnsSec, args: argparse.Namespace) -> int:
+    keys = tool.list_keys(args.ZONE, recursive=args.recurse)
+    expired = []
+    exp_ksk = 0
+    for key in keys:
+        if key.state() == "DEL":
+            if key.type == "KSK":
+                exp_ksk += 1
+            expired.append(key)
+    print(f"Found {len(expired)} expired keys, {exp_ksk} of which are key-signing keys.")
+    plan = []
+    for key in expired:
+        if args.auto:
+            year = str(key.d_inactive.year).rjust(4, "0")
+            tdir = tool.path / (args.TARGET + year)
+        else:
+            tdir = tool.path / args.TARGET
+        plan.append([key.type, key.path_rr, tdir])
+        plan.append([key.type, key.path_pk, tdir])
+    if not len(plan):
+        return 0
+    if args.dry_run:
+        print("Would move: ")
+    src: Path
+    dst: Path
+    for typ, src, dst in plan:
+        if args.dry_run:
+            print("  ", typ, " ", src, " -> ", dst)
+        else:
+            dst.mkdir(parents=True, exist_ok=True)
+            src.rename(dst)
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--dir", type=str,
+                        help="directory containing key files")
+
+    sp = parser.add_subparsers(metavar="COMMAND")
+    sp.required = True
+
+    p_listkeys = sp.add_parser("listkeys",
+                               help="List currently active keys and their timing")
+    p_listkeys.add_argument("ZONE", type=str,
+                            help="DNS zone to work on")
+    p_listkeys.add_argument("-r", "--recurse", action="store_true", default=False,
+                            help="Show key for all zones below the given one")
+    p_listkeys.add_argument("-s", "--state", choices=["PUB", "ACT", "INAC", "DEL", "FUT"], default="", type=str.upper,
+                            help="Filter keys by current state")
+    p_listkeys.set_defaults(func=main_listkeys)
+
+    p_archive = sp.add_parser("archive",
+                              help="Move expired keys to archive location")
+    p_archive.add_argument("ZONE", type=str,
+                           help="DNS zone to work on")
+    p_archive.add_argument("TARGET", type=str,
+                           help="Target path to move to")
+    p_archive.add_argument("-r", "--recurse", action="store_true", default=False,
+                           help="Recursively acton zones below the given one")
+    p_archive.add_argument("-n", "--dry-run", action="store_true", default=False,
+                           help="Don't perform action, just show plan")
+    p_archive.add_argument("--auto", action="store_true", default=False,
+                           help="Automatically append year of Inactive to TARGET")
+    p_archive.set_defaults(func=main_archive)
+
+    args = parser.parse_args()
+
+    if args.dir:
+        keydir = Path(args.dir)
+        if not keydir.exists():
+            raise IOError(f"Key directory '{args.dir}' not found!")
+    else:
+        keydir = Path.cwd()
+
+    if args.ZONE:
+        if not args.ZONE.endswith("."):
+            args.ZONE += "."
+            print(f"Zone is missing root label, assuming fully qualified: {args.ZONE}", file=sys.stderr)
+
+    tool = DnsSec(keydir)
+
+    return args.func(tool, args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
