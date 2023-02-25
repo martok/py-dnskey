@@ -12,6 +12,20 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         print("Zone: ", args.ZONE)
     else:
         print(f"{'Zone':64s} ", end="")
+    if args.sort:
+        fn = None
+        if args.sort == "ZONE":
+            fn = lambda k: k.zone
+        elif args.sort == "ALG":
+            fn = lambda k: k.algo
+        elif args.sort == "ID":
+            fn = lambda k: k.keyid
+        elif args.sort == "STATE":
+            fn = lambda k: k.state()
+        elif args.sort == "DATE":
+            fn = lambda k: k.next_change() or datetime.datetime.fromtimestamp(0)
+        keys = sorted(keys, key=fn)
+
     print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event'}")
     for key in keys:
         if args.state and key.state() != args.state:
@@ -77,6 +91,8 @@ def main():
                         help="Filter keys by current state")
     p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
                         help="Filter keys by type")
+    p_list.add_argument("-o", "--sort", choices=["ZONE", "ALG", "ID", "STATE", "DATE"], default="", type=str.upper,
+                        help="Sort keys by attribute")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",
