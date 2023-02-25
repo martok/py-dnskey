@@ -35,8 +35,8 @@ positional arguments:
         TARGET         Target path to move to
 
       options:
-        -r, --recurse  Recursively acton zones below the given one
+        -r, --recurse  Recursively act on zones below the given one
         -n, --dry-run  Don't perform action, just show plan
-        --auto         Automatically append year of Inactive to TARGET
+        --auto         Automatically append year of inactivation to TARGET
 
 ```
