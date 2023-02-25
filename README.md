@@ -14,8 +14,8 @@ options:
 
 positional arguments:
   COMMAND
-    listkeys [-h] [-r] [-s {PUB,ACT,INAC,DEL,FUT}] ZONE
-      List currently active keys and their timing
+    list [-h] [-r] [-s {PUB,ACT,INAC,DEL,FUT}] ZONE
+      List currently present keys and their timing
 
       positional arguments:
         ZONE                  DNS zone to work on
