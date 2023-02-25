@@ -86,11 +86,11 @@ def main():
     p_archive.add_argument("TARGET", type=str,
                            help="Target path to move to")
     p_archive.add_argument("-r", "--recurse", action="store_true", default=False,
-                           help="Recursively acton zones below the given one")
+                           help="Recursively act on zones below the given one")
     p_archive.add_argument("-n", "--dry-run", action="store_true", default=False,
                            help="Don't perform action, just show plan")
     p_archive.add_argument("--auto", action="store_true", default=False,
-                           help="Automatically append year of Inactive to TARGET")
+                           help="Automatically append year of inactivation to TARGET")
     p_archive.set_defaults(func=main_archive)
 
     args = parser.parse_args()
