@@ -1,30 +1,41 @@
 #!/usr/bin/env -S python3 -u
 import argparse
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
-from dnssec import DnsSec
+from dnssec import DnsSec, KeyFile
+
+
+def sort_by_field(field: str):
+    if field == "ZONE":
+        return lambda k: k.zone
+    elif field == "ALG":
+        return lambda k: k.algo
+    elif field == "ID":
+        return lambda k: k.keyid
+    elif field == "STATE":
+        return lambda k: k.state()
+    elif field == "DATE":
+        return lambda k: k.next_change() or datetime(3000,1,1)
+
+
+def fmt_next_change(key: KeyFile) -> str:
+    n = key.next_change()
+    if n is None:
+        return "-"
+    return str(n)
 
 
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = tool.list_keys(args.ZONE, recursive=args.recurse)
+    zone_width = max(len(k.zone) for k in keys)
     if not args.recurse:
         print("Zone: ", args.ZONE)
     else:
-        print(f"{'Zone':64s} ", end="")
+        print(f"{'Zone':{zone_width}s} ", end="")
     if args.sort:
-        fn = None
-        if args.sort == "ZONE":
-            fn = lambda k: k.zone
-        elif args.sort == "ALG":
-            fn = lambda k: k.algo
-        elif args.sort == "ID":
-            fn = lambda k: k.keyid
-        elif args.sort == "STATE":
-            fn = lambda k: k.state()
-        elif args.sort == "DATE":
-            fn = lambda k: k.next_change() or datetime.datetime.fromtimestamp(0)
-        keys = sorted(keys, key=fn)
+        keys = sorted(keys, key=sort_by_field(args.sort))
 
     print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event':20s}")
     for key in keys:
@@ -33,15 +44,11 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         if args.type and key.type != args.type:
             continue
         if args.recurse:
-            print(f"{key.zone:64s} ", end="")
-        def next_change_str(k):
-            n = key.next_change()
-            if n is None:
-                return "-"
-            return str(n)
-        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {next_change_str(key):20s} ", end="" if args.print_record else None)
+            print(f"{key.zone:{zone_width}s} ", end="")
+        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {fmt_next_change(key):20s} ", end="" if args.print_record else None)
         if args.print_record:
             print(key.dnskey_rr())
+    print("")
     return 0
 
 
