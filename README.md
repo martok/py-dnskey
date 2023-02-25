@@ -26,6 +26,10 @@ positional arguments:
                               Filter keys by current state
         -t, --type {ZSK,KSK}
                               Filter keys by type
+        -o, --sort {ZONE,ALG,ID,STATE,DATE}
+                              Sort keys by attribute
+        --print-record        Output DNSKEY RR payload in table
+
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
       Move expired keys to archive location

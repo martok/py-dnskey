@@ -87,6 +87,14 @@ class KeyFile:
             return next(filter(lambda x: x > ref, assigned), None)
         return "Inconsistent Dates"
 
+    def dnskey_rr(self):
+        ret = []
+        with self.path_rr.open("rt") as key:
+            for line in key.readlines():
+                if not line.startswith(";") and "DNSKEY" in line:
+                    ret.append(line.split("DNSKEY")[1].strip())
+        return "\n".join(ret).strip()
+
 
 class DnsSec:
 

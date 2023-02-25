@@ -26,7 +26,7 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             fn = lambda k: k.next_change() or datetime.datetime.fromtimestamp(0)
         keys = sorted(keys, key=fn)
 
-    print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event'}")
+    print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event':20s}")
     for key in keys:
         if args.state and key.state() != args.state:
             continue
@@ -34,7 +34,14 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             continue
         if args.recurse:
             print(f"{key.zone:64s} ", end="")
-        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {key.next_change()}")
+        def next_change_str(k):
+            n = key.next_change()
+            if n is None:
+                return "-"
+            return str(n)
+        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {next_change_str(key):20s} ", end="" if args.print_record else None)
+        if args.print_record:
+            print(key.dnskey_rr())
     return 0
 
 
@@ -93,6 +100,8 @@ def main():
                         help="Filter keys by type")
     p_list.add_argument("-o", "--sort", choices=["ZONE", "ALG", "ID", "STATE", "DATE"], default="", type=str.upper,
                         help="Sort keys by attribute")
+    p_list.add_argument("--print-record", action="store_true", default=False,
+                        help="Output DNSKEY RR payload in table")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",
