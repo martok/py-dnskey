@@ -2,6 +2,11 @@
 
 Simple tool for DNSSEC key management.
 
+## Installation
+
+Install using pip:
+
+```pip install --user .```
 
 ## Usage
 
