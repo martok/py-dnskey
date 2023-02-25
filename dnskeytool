@@ -7,6 +7,57 @@ from pathlib import Path
 from dnssec import DnsSec, KeyFile
 
 
+def parse_datetime_relative(inp: str) -> timedelta:
+    # number of seconds
+    try:
+        ts = int(inp)
+        return timedelta(seconds=ts)
+    except ValueError:
+        pass
+    try:
+        if inp.endswith("m"):
+            return timedelta(minutes=int(inp[:-1]))
+        if inp.endswith("h"):
+            return timedelta(hours=int(inp[:-1]))
+        if inp.endswith("d"):
+            return timedelta(days=int(inp[:-1]))
+        if inp.endswith("w"):
+            return timedelta(weeks=int(inp[:-1]))
+    except ValueError:
+        pass
+    raise ValueError(f"{inp} is not a valid relative date/time value")
+
+
+def parse_datetime(inp: str) -> datetime:
+    # DNS timestamp format YYYYMMDDHHmmss
+    if len(inp) == 14 and inp.startswith("20"):
+        try:
+            y = int(inp[0:4])
+            m = int(inp[4:6])
+            d = int(inp[6:8])
+            h = int(inp[8:10])
+            n = int(inp[10:12])
+            s = int(inp[12:14])
+            return datetime(y, m, d, h, n, s)
+        except ValueError:
+            pass
+    # unix timestamp (seconds)
+    try:
+        ts = int(inp)
+        return datetime.fromtimestamp(ts)
+    except ValueError:
+        pass
+    # ISO format
+    try:
+        return datetime.fromisoformat(inp)
+    except ValueError:
+        pass
+    # time relative to now
+    if inp.startswith("+"):
+        return datetime.now() + parse_datetime_relative(inp[1:])
+    raise ValueError(f"{inp} is not a valid date/time value")
+
+
 def sort_by_field(field: str):
     if field == "ZONE":
         return lambda k: k.zone
@@ -17,11 +68,11 @@ def sort_by_field(field: str):
     elif field == "STATE":
         return lambda k: k.state()
     elif field == "DATE":
-        return lambda k: k.next_change() or datetime(3000,1,1)
+        return lambda k: k.next_change() or datetime(3000, 1, 1)
 
 
-def fmt_next_change(key: KeyFile) -> str:
-    n = key.next_change()
+def fmt_next_change(key: KeyFile, ref: datetime) -> str:
+    n = key.next_change(ref=ref)
     if n is None:
         return "-"
     return str(n)
@@ -34,6 +85,10 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         print("Zone: ", args.ZONE)
     else:
         print(f"{'Zone':{zone_width}s} ", end="")
+    if args.when:
+        when = args.when
+    else:
+        when = datetime.now()
     if args.sort:
         keys = sorted(keys, key=sort_by_field(args.sort))
 
@@ -45,7 +100,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             continue
         if args.recurse:
             print(f"{key.zone:{zone_width}s} ", end="")
-        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state():7s} {fmt_next_change(key):20s} ", end="" if args.print_record else None)
+        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state(when):7s} {fmt_next_change(key, when):20s} ",
+              end="" if args.print_record else None)
         if args.print_record:
             print(key.dnskey_rr())
     print("")
@@ -99,6 +155,8 @@ def main():
                            help="List currently present keys and their timing")
     p_list.add_argument("ZONE", type=str,
                         help="DNS zone to work on")
+    p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
+                        help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-r", "--recurse", action="store_true", default=False,
                         help="Show key for all zones below the given one")
     p_list.add_argument("-s", "--state", choices=["PUB", "ACT", "INAC", "DEL", "FUT"], default="", type=str.upper,

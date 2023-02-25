@@ -22,6 +22,7 @@ positional arguments:
 
       options:
         -r, --recurse         Show key for all zones below the given one
+        --when DATETIME       When computing states, use DATETIME instead of current
         -s, --state {PUB,ACT,INAC,DEL,FUT}
                               Filter keys by current state
         -t, --type {ZSK,KSK}
@@ -44,3 +45,28 @@ positional arguments:
         --auto         Automatically append year of inactivation to TARGET
 
 ```
+
+### Date/Time Input
+
+For relative time, the following syntaxes are accepted:
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| #      | seconds     | 42      |
+| #s     | Minutes     | 60m     |
+| #h     | Hours       | 24h     |
+| #d     | Days        | 7d      |
+| #w     | Weeks       | 4w      |
+
+
+For absolute points in time, the following syntaxes are accepted:
+
+| Syntax                                                     | Description                               | Example        |
+|------------------------------------------------------------|-------------------------------------------|----------------|
+| YYYYMMDDHHmmss                                             | DNS timestamp format                      | 20230523104200 |
+| #                                                          | Unix timestamp, seconds                   | 1677331582     |
+| YYYY-MM-DD[*HH[:MM[:SS[.fff[fff]]]][+HH:MM[:SS[.ffffff]]]] | ISO 8601, as processed by [Python][pyiso] | 2022-07-29     |
+| +FMT                                                       | Relative time to now, as described above  | +8w            |
+
+[pyiso]: https://docs.python.org/3/library/datetime.html#datetime.datetime.fromisoformat
+
