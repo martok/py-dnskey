@@ -3,6 +3,7 @@ import argparse
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 from dnssec import DnsSec, KeyFile
 
@@ -100,39 +101,92 @@ def sort_by_field(field: str):
         return lambda k: k.next_change() or datetime(3000, 1, 1)
 
 
-def fmt_next_change(key: KeyFile, ref: datetime) -> str:
+def fmt_next_change(ref: datetime, key: KeyFile) -> str:
     n = key.next_change(ref=ref)
     if n is None:
         return "-"
     return str(n)
 
 
+def fmt_datetime_relative(ref: datetime, date: Optional[datetime], compressed=True) -> str:
+    if date is None:
+        return "-"
+    if date > ref:
+        sign = "+"
+        rel = date - ref
+    else:
+        sign = "-"
+        rel = ref - date
+    sec = int(rel.total_seconds())
+    MINSEC = 60
+    HOURSEC = MINSEC * 60
+    DAYSEC = HOURSEC * 24
+    WEEKSEC = DAYSEC * 7
+    YEARSEC = DAYSEC * 365
+    s = []
+    if sec >= YEARSEC * 1.2:
+        s.append(f"{sec // YEARSEC}y")
+        sec = sec % YEARSEC
+    if sec >= WEEKSEC * 1.2:
+        s.append(f"{sec // WEEKSEC}w")
+        sec = sec % WEEKSEC
+    if sec >= DAYSEC * 1.2:
+        s.append(f"{sec // DAYSEC}d")
+        sec = sec % DAYSEC
+    if sec >= HOURSEC * 1.2:
+        s.append(f"{sec // HOURSEC}h")
+        sec = sec % HOURSEC
+    if sec >= MINSEC * 1.2:
+        s.append(f"{sec // MINSEC}m")
+        sec = sec % MINSEC
+    if sec >= 0:
+        s.append(f"{sec}s")
+    if compressed:
+        s = s[:1]
+    return sign + "".join(s)
+
+
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = tool.list_keys(args.ZONE, recursive=args.recurse)
-    zone_width = max(len(k.zone) for k in keys)
-    if not args.recurse:
-        print("Zone: ", args.ZONE)
-    else:
-        print(f"{'Zone':{zone_width}s} ", end="")
     if args.when:
         when = args.when
     else:
         when = datetime.now()
+    if args.state:
+        keys = filter(lambda k: k.state == args.state, keys)
+    if args.type:
+        keys = filter(lambda k: k.type == args.type, keys)
     if args.sort:
         keys = sorted(keys, key=sort_by_field(args.sort))
+    keys = list(keys)
+    zone_width = max(len(k.zone) for k in keys) if keys else 0
+    fields = [f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s}"]
+    if args.recurse:
+        fields.insert(0, f"{'Zone':{zone_width}s}")
+    else:
+        print("Zone: ", args.ZONE)
+    if args.calendar:
+        # crea publ acti inac dele
+        fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s} ")
+    else:
+        fields.append(f"{'Next Key Event':20s}")
+    print(" ".join(fields))
 
-    print(f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s} {'Next Key Event':20s}")
     for key in keys:
-        if args.state and key.state() != args.state:
-            continue
-        if args.type and key.type != args.type:
-            continue
+        fields = [f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state(when):7s}"]
         if args.recurse:
-            print(f"{key.zone:{zone_width}s} ", end="")
-        print(f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state(when):7s} {fmt_next_change(key, when):20s} ",
-              end="" if args.print_record else None)
+            fields.insert(0, f"{key.zone:{zone_width}s}")
+        if args.calendar:
+            fields.append(f"{fmt_datetime_relative(when, key.d_create):>4s}")
+            fields.append(f"{fmt_datetime_relative(when, key.d_publish):>4s}")
+            fields.append(f"{fmt_datetime_relative(when, key.d_active):>4s}")
+            fields.append(f"{fmt_datetime_relative(when, key.d_inactive):>4s}")
+            fields.append(f"{fmt_datetime_relative(when, key.d_delete):>4s}")
+        else:
+            fields.append(f"{fmt_next_change(when, key):20s}")
+        print(" ".join(fields))
         if args.print_record:
-            print(key.dnskey_rr())
+            print(f"{'':{zone_width}s}", key.dnskey_rr())
     print("")
     return 0
 
@@ -197,6 +251,8 @@ def main():
                         help="Sort keys by attribute")
     p_list.add_argument("--print-record", action="store_true", default=False,
                         help="Output DNSKEY RR payload in table")
+    p_list.add_argument("-c", "--calendar", action="store_true", default=False,
+                        help="Show relative time to each state change (default: only timestamp of next change)")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",

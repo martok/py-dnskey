@@ -30,6 +30,7 @@ positional arguments:
         -o, --sort {ZONE,ALG,ID,STATE,DATE}
                               Sort keys by attribute
         --print-record        Output DNSKEY RR payload in table
+        -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
 
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
