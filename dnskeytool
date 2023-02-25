@@ -7,6 +7,35 @@ from pathlib import Path
 from dnssec import DnsSec, KeyFile
 
 
+def shortest_unique(*choices):
+    def wrapped(func):
+        def parser(inp: str):
+            s = func(inp)
+            # simple cases: not given or direct match?
+            if s == "" or s in choices:
+                return inp
+            # uniquely specified?
+            matching = [c for c in choices if c.startswith(s)]
+            if len(matching) == 1:
+                return matching[0]
+            raise ValueError(f"Ambiguous argument {s}, could mean one of {' '.join(matching)}")
+
+        parser.CHOICES = choices
+        return parser
+
+    return wrapped
+
+
+@shortest_unique("PUB", "ACT", "INAC", "DEL", "FUT")
+def parse_state(inp: str) -> str:
+    return inp.upper()
+
+
+@shortest_unique("ZONE", "ALG", "ID", "STATE", "DATE")
+def parse_table_sort(inp: str) -> str:
+    return inp.upper()
+
+
 def parse_datetime_relative(inp: str) -> timedelta:
     # number of seconds
     try:
@@ -159,11 +188,12 @@ def main():
                         help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-r", "--recurse", action="store_true", default=False,
                         help="Show key for all zones below the given one")
-    p_list.add_argument("-s", "--state", choices=["PUB", "ACT", "INAC", "DEL", "FUT"], default="", type=str.upper,
+    p_list.add_argument("-s", "--state", choices=parse_state.CHOICES, default="", type=parse_state, metavar="STATE",
                         help="Filter keys by current state")
     p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
                         help="Filter keys by type")
-    p_list.add_argument("-o", "--sort", choices=["ZONE", "ALG", "ID", "STATE", "DATE"], default="", type=str.upper,
+    p_list.add_argument("-o", "--sort", choices=parse_table_sort.CHOICES, default="", type=parse_table_sort,
+                        metavar="FIELD",
                         help="Sort keys by attribute")
     p_list.add_argument("--print-record", action="store_true", default=False,
                         help="Output DNSKEY RR payload in table")
