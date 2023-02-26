@@ -1,6 +1,6 @@
-import datetime
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -9,7 +9,7 @@ def date_part(colon_line: str) -> datetime:
     dt = words[2]
     if len(dt) != len("yyyymmddhhmmss"):
         raise ValueError(f"Unexpected date format: '{colon_line}'")
-    return datetime.datetime.strptime(dt, "%Y%m%d%H%M%S")
+    return datetime.strptime(dt, "%Y%m%d%H%M%S")
 
 
 class KeyFile:
@@ -58,12 +58,18 @@ class KeyFile:
                     if self.zone != words[-1]:
                         raise ValueError(f"{self.name} claims to be for id {self.zone}, but is not!")
 
+    def __repr__(self):
+        return f"KeyFile({str(self)})"
+
+    def __str__(self):
+        return f"{self.zone}+{self.algo:03d}+{self.keyid:05d}"
+
     def sort_key(self):
         return f"{self.zone}+{self.type}+{self.algo:3d}+{self.keyid:5d}"
 
     def state(self, ref=None):
         if ref is None:
-            ref = datetime.datetime.now()
+            ref = datetime.now()
         if self.d_delete is not None and self.d_delete <= ref:
             return "DEL"
         if self.d_inactive is not None and self.d_inactive <= ref:
@@ -78,7 +84,7 @@ class KeyFile:
 
     def next_change(self, ref=None):
         if ref is None:
-            ref = datetime.datetime.now()
+            ref = datetime.now()
         # check if the ordering is consistent, but ignore Created
         assigned = list(filter(lambda x: x is not None,
                                [self.d_publish, self.d_active, self.d_inactive, self.d_delete]))

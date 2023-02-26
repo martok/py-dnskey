@@ -5,4 +5,4 @@
 SOURCE=$(readlink -f ${BASH_SOURCE:-$0})
 DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 export PYTHONPATH=$DIR/src:${PYTHONPATH}
-exec python3 -u -c 'from dnskeytool.shell import main; main()' "$@"
+exec python3 -u -c 'from dnskeytool.shell import main; import sys; sys.argv[0]="'$0'"; main()' "$@"
