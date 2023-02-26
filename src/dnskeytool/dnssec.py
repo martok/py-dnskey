@@ -1,3 +1,4 @@
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -23,9 +24,6 @@ class KeyFile:
         self.path_rr = path
         self.path_pk = path.with_suffix(".private")
         self.name = path.stem
-        self.owner = path.owner()
-        self.group = path.group()
-        self.perm = path.stat().st_mode
         ff = path.stem.split("+")
         self.zone = ff[0][1:]
         self.algo = int(ff[1])
@@ -106,6 +104,27 @@ class KeyFile:
                     ret.append(line.split("DNSKEY")[1].strip())
         return "\n".join(ret).strip()
 
+    def set_perms(self, *,
+                  rr_perm: int = 0o644, rr_owner: str = "root", rr_grp: str = "bind",
+                  pk_perm: int = 0o600, pk_owner: str = "bind", pk_grp: str = "bind",
+                  check_only: bool = False) -> bool:
+
+        def adjust(file: Path, perm, user, grp):
+            change_made = False
+            if file.owner() != user or file.group() != grp:
+                if not check_only:
+                    shutil.chown(file, user=user, group=grp)
+                change_made = True
+            if file.stat().st_mode & 0o777 != perm:
+                if not check_only:
+                    file.chmod(perm)
+                change_made = True
+            return change_made
+
+        res = False
+        res = adjust(self.path_rr, rr_perm, rr_owner, rr_grp) or res
+        res = adjust(self.path_pk, pk_perm, pk_owner, pk_grp) or res
+        return res
 
 class DnsSec:
 
@@ -162,3 +181,5 @@ class DnsSec:
         new_key = KeyFile(self.path / new_file)
         self.key_settime(new_key, publish=publish, activate=activate, inactivate=inactivate, delete=delete)
         return new_key
+
+

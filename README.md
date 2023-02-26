@@ -55,7 +55,7 @@ positional arguments:
 
       positional arguments:
         ZONE                  DNS zone to work on
-    
+
       options:
         -h, --help            show this help message and exit
         -t {ZSK,KSK}, --type {ZSK,KSK}
@@ -69,6 +69,17 @@ positional arguments:
                               Overlap between active keys, calculated from the end of active phase (Default: 1w)
         -a INTERVAL, --postpublish INTERVAL
                               Time to publish keys after their deactivation date (Default: 1w)
+
+    permissions [-h] [-n] FILES [FILES ...]
+      Fix file permissions
+
+      positional arguments:
+        FILES          File or shell pattern to match, excluding file extension
+
+      options:
+        -h, --help     show this help message and exit
+        -n, --dry-run  Don't perform action, just show files that would be changed
+
 ```
 
 ### Date/Time Input

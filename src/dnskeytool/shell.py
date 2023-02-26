@@ -327,6 +327,32 @@ def main_rotate(tool: DnsSec, args: argparse.Namespace) -> int:
     return 0
 
 
+def main_permissions(tool: DnsSec, args: argparse.Namespace) -> int:
+    def expand_masks():
+        for mask in args.FILES:
+            for fil in tool.path.glob(mask):
+                if fil.suffix == ".key":
+                    yield fil
+            if not mask.endswith("."):
+                mask += "."
+            for fil in tool.path.glob(mask + "key"):
+                yield fil
+
+    matched = sorted(set(expand_masks()))
+
+    if args.dry_run:
+        print("Would change:")
+    for file in matched:
+        kf = KeyFile(file)
+        change = kf.set_perms(check_only=True)
+        if change:
+            print(kf.name)
+            if not args.dry_run:
+                kf.set_perms(check_only=False)
+
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -393,6 +419,14 @@ def main():
                           help="Time to publish keys after their deactivation date (Default: 1w)")
     p_rotate.set_defaults(func=main_rotate)
 
+    p_perms = sp.add_parser("permissions",
+                            help="Fix file permissions")
+    p_perms.add_argument("FILES", type=str, nargs="+",
+                         help="File or shell pattern to match, excluding file extension")
+    p_perms.add_argument("-n", "--dry-run", action="store_true", default=False,
+                         help="Don't perform action, just show files that would be changed")
+    p_perms.set_defaults(func=main_permissions)
+
     args = parser.parse_args()
 
     if args.dir:
@@ -402,7 +436,7 @@ def main():
     else:
         keydir = Path.cwd()
 
-    if args.ZONE:
+    if "ZONE" in args and args.ZONE:
         if not args.ZONE.endswith("."):
             args.ZONE += "."
             print(f"Zone is missing root label, assuming fully qualified: {args.ZONE}", file=sys.stderr)
