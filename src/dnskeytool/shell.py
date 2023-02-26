@@ -318,6 +318,7 @@ def main_rotate(tool: DnsSec, args: argparse.Namespace) -> int:
         deletes = inactivates + post_intv
         try:
             new_key = tool.key_gentemplate(template, publishes, activates, inactivates, deletes)
+            new_key.set_perms()
             return 0
         except BaseException as e:
             print(str(e), file=sys.stderr)
