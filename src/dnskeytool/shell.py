@@ -167,6 +167,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = list(keys)
     zone_width = max(len(k.zone) for k in keys) if keys else 0
     fields = [f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s}"]
+    if args.permissions:
+        fields.insert(0, f"{'Perms':^5s}")
     if args.recurse:
         fields.insert(0, f"{'Zone':{zone_width}s}")
     else:
@@ -180,6 +182,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
 
     for key in keys:
         fields = [f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state(when):7s}"]
+        if args.permissions:
+            fields.insert(0, f"{'*' if key.set_perms(check_only=True) else '':^5s}")
         if args.recurse:
             fields.insert(0, f"{key.zone:{zone_width}s}")
         if args.calendar:
@@ -381,6 +385,8 @@ def main():
                         help="Output DNSKEY RR payload in table")
     p_list.add_argument("-c", "--calendar", action="store_true", default=False,
                         help="Show relative time to each state change (default: only timestamp of next change)")
+    p_list.add_argument("-p", "--permissions", action="store_true", default=False,
+                        help="Print asterisk for keys with bad permissions")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",

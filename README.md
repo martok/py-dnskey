@@ -36,6 +36,7 @@ positional arguments:
                               Sort keys by attribute
         --print-record        Output DNSKEY RR payload in table
         -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
+        -p, --permissions     Print asterisk for keys with bad permissions
 
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
