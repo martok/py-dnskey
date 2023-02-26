@@ -2,6 +2,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
 def date_part(colon_line: str) -> datetime:
@@ -10,6 +11,10 @@ def date_part(colon_line: str) -> datetime:
     if len(dt) != len("yyyymmddhhmmss"):
         raise ValueError(f"Unexpected date format: '{colon_line}'")
     return datetime.strptime(dt, "%Y%m%d%H%M%S")
+
+
+def date_str(date: datetime) -> str:
+    return date.strftime("%Y%m%d%H%M%S")
 
 
 class KeyFile:
@@ -110,10 +115,11 @@ class DnsSec:
 
     def _call(self, args):
         if self.echo:
-            print("Executing: {str(args)}", file=sys.stderr)
-        ret = subprocess.run(args, cwd=self.path)
+            print(f"Executing: {str(args)}", file=sys.stderr)
+        ret = subprocess.run(args, cwd=self.path, stdout=subprocess.PIPE, text=True)
         if ret.returncode != 0:
             raise OSError(f"Error executing process: {ret.returncode}\n{ret.stderr}")
+        return ret.stdout.strip().splitlines(keepends=False)
 
     def _iter_keyfiles(self, zone: str):
         files = self.path.glob(f"K{zone}+*+*.key")
@@ -131,3 +137,28 @@ class DnsSec:
             kf = KeyFile(pk)
             result.append(kf)
         return list(sorted(result, key=KeyFile.sort_key))
+
+    def key_settime(self, key: KeyFile, *,
+                    publish: Optional[datetime] = None, activate: Optional[datetime] = None,
+                    inactivate: Optional[datetime] = None, delete: Optional[datetime] = None):
+        p = []
+        if publish is not None:
+            p += ["-P", date_str(publish)]
+        if activate is not None:
+            p += ["-A", date_str(activate)]
+        if inactivate is not None:
+            p += ["-I", date_str(inactivate)]
+        if delete is not None:
+            p += ["-D", date_str(delete)]
+        if p:
+            self._call(["dnssec-settime", *p, key.name])
+
+    def key_gentemplate(self, template: KeyFile,
+                        publish: Optional[datetime] = None, activate: Optional[datetime] = None,
+                        inactivate: Optional[datetime] = None, delete: Optional[datetime] = None) -> KeyFile:
+        # dnssec-keygen can only do successor *or* custom times, so create first and then adjust
+        pipe = self._call(["dnssec-keygen", "-S", template.name, "-i", "0"])
+        new_file = pipe[-1] + ".key"
+        new_key = KeyFile(self.path / new_file)
+        self.key_settime(new_key, publish=publish, activate=activate, inactivate=inactivate, delete=delete)
+        return new_key

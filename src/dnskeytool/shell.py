@@ -1,9 +1,12 @@
+#!/usr/bin/env -S python3 -u
 import argparse
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from pprint import pprint
 from typing import Optional
 
+from .util import groupby_freeze
 from .dnssec import DnsSec, KeyFile
 
 
@@ -107,16 +110,8 @@ def fmt_next_change(ref: datetime, key: KeyFile) -> str:
     return str(n)
 
 
-def fmt_datetime_relative(ref: datetime, date: Optional[datetime], compressed=True) -> str:
-    if date is None:
-        return "-"
-    if date > ref:
-        sign = "+"
-        rel = date - ref
-    else:
-        sign = "-"
-        rel = ref - date
-    sec = int(rel.total_seconds())
+def fmt_timespan(span: timedelta, compressed=True) -> str:
+    sec = int(span.total_seconds())
     MINSEC = 60
     HOURSEC = MINSEC * 60
     DAYSEC = HOURSEC * 24
@@ -142,7 +137,19 @@ def fmt_datetime_relative(ref: datetime, date: Optional[datetime], compressed=Tr
         s.append(f"{sec}s")
     if compressed:
         s = s[:1]
-    return sign + "".join(s)
+    return "".join(s)
+
+
+def fmt_datetime_relative(ref: datetime, date: Optional[datetime], compressed=True) -> str:
+    if date is None:
+        return "-"
+    if date > ref:
+        sign = "+"
+        rel = date - ref
+    else:
+        sign = "-"
+        rel = ref - date
+    return sign + fmt_timespan(rel, compressed)
 
 
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
@@ -224,6 +231,102 @@ def main_archive(tool: DnsSec, args: argparse.Namespace) -> int:
     return 0
 
 
+def main_rotate(tool: DnsSec, args: argparse.Namespace) -> int:
+    if args.type != "ZSK":
+        raise NotImplementedError("Only ZSKs can be rotated.")
+    keys = tool.list_keys(args.ZONE, recursive=False)
+    # ignore keys that are already expired and deleted or don't have a runtime
+    keys = filter(lambda k: k.type == args.type, keys)
+    keys = filter(lambda k: k.d_inactive is not None and k.state() != "DEL", keys)
+    keys = list(keys)
+    if len(keys) == 0:
+        print("No keys qualified for renewal.")
+        return 0
+    # sanity checks on timing parameters
+    prepub_intv: timedelta = args.prepublish
+    life_intv: timedelta = args.lifetime
+    post_intv: timedelta = args.postpublish
+    overl_intv: timedelta = args.overlap
+    second = timedelta(seconds=1)
+    if prepub_intv.total_seconds() < 0:
+        raise ValueError(f"Key pre-publication is negative")
+    if life_intv.total_seconds() < 0:
+        raise ValueError(f"Key lifetime is negative")
+    if post_intv.total_seconds() < 0:
+        raise ValueError(f"Key post-publication is negative")
+    if overl_intv.total_seconds() < 0:
+        raise ValueError(f"Key overlap is negative")
+    if overl_intv >= life_intv:
+        raise ValueError(
+            f"Key overlap {fmt_timespan(overl_intv, False)} is longer than lifetime {fmt_timespan(life_intv, False)}")
+
+    # begin planning
+    plan = []
+    # each algo is a separate list of keys
+    by_algo = groupby_freeze(keys, lambda k: k.algo)
+    for algo, akeys in by_algo.items():
+        print(f"Zone: {args.ZONE}, signature algo: {algo}")
+        # when new keys are made, always use the most recently generated one as a template
+        # this allows the user to "inject" new key configs by hot-swapping a key between rotations
+        template = sorted(akeys, key=lambda k: k.d_create or datetime.fromtimestamp(0))[-1]
+
+        by_state = groupby_freeze(akeys, lambda k: k.state())
+        if "ACT" not in by_state:
+            print(f"No keys are currently active for algorithm {algo}, please fix and rerun...", file=sys.stderr)
+            continue
+        activekeys = sorted(by_state["ACT"], key=lambda k: k.d_inactive)
+
+        # when a currently active key becomes inactive, there must be a key that becomes/is already
+        # (depending on overlap). this is recursively true for any key currently active, not just the "main" / earliest
+        # one: the other currently active keys are in their overlap phase, but we must check their successors here as
+        # well in case the intervals are changed (or really short)
+        for active in activekeys:
+            ends = active.d_inactive + second
+            # check if we need to fix the deletion time
+            if active.d_delete is None or active.d_delete > ends + post_intv:
+                plan.append(["set_times", active, dict(delete=active.d_inactive + post_intv)])
+            successors = [k for k in akeys if k.state(ends) == "ACT"]
+            if not successors:
+                # need to make one!
+                plan.append(["make_successor", template, active.d_inactive])
+        # any other key state is just transitional or set on key creation, so we're done here
+
+    if not plan:
+        print("Nothing to do.")
+        return 0
+
+    if args.dry_run:
+        pprint(plan)
+        return 0
+
+    def set_times(key: KeyFile, times):
+        try:
+            tool.key_settime(key, **times)
+            return 0
+        except BaseException as e:
+            print(str(e), file=sys.stderr)
+            return 2
+
+    def make_successor(template: KeyFile, activate_at: datetime):
+        activates = activate_at - overl_intv
+        publishes = activates - prepub_intv
+        inactivates = activates + life_intv
+        deletes = inactivates + post_intv
+        try:
+            new_key = tool.key_gentemplate(template, publishes, activates, inactivates, deletes)
+            return 0
+        except BaseException as e:
+            print(str(e), file=sys.stderr)
+            return 2
+
+    for task, *args in plan:
+        fn = locals()[task]
+        ret = fn(*args)
+        if ret != 0:
+            return ret
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -267,6 +370,28 @@ def main():
     p_archive.add_argument("--auto", action="store_true", default=False,
                            help="Automatically append year of inactivation to TARGET")
     p_archive.set_defaults(func=main_archive)
+
+    p_rotate = sp.add_parser("rotate",
+                             help="Rotate keys based on lifetime")
+    p_rotate.add_argument("ZONE", type=str,
+                          help="DNS zone to work on")
+    p_rotate.add_argument("-t", "--type", choices=["ZSK", "KSK"], required=True, type=str.upper,
+                          help="Filter keys by type")
+    p_rotate.add_argument("-n", "--dry-run", action="store_true", default=False,
+                          help="Don't perform action, just show plan")
+    p_rotate.add_argument("-b", "--prepublish", default=parse_datetime_relative("1w"), type=parse_datetime_relative,
+                          metavar="INTERVAL",
+                          help="Time to publish keys before its activation date (Default: 1w)")
+    p_rotate.add_argument("-l", "--lifetime", default=parse_datetime_relative("2w"), type=parse_datetime_relative,
+                          metavar="INTERVAL",
+                          help="Active lifetime of keys (Default: 2w)")
+    p_rotate.add_argument("-o", "--overlap", default=parse_datetime_relative("1w"), type=parse_datetime_relative,
+                          metavar="INTERVAL",
+                          help="Overlap between active keys, calculated from the end of active phase (Default: 1w)")
+    p_rotate.add_argument("-a", "--postpublish", default=parse_datetime_relative("1w"), type=parse_datetime_relative,
+                          metavar="INTERVAL",
+                          help="Time to publish keys after their deactivation date (Default: 1w)")
+    p_rotate.set_defaults(func=main_rotate)
 
     args = parser.parse_args()
 
