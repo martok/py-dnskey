@@ -5,17 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-
-def date_part(colon_line: str) -> datetime:
-    words = colon_line.split()
-    dt = words[2]
-    if len(dt) != len("yyyymmddhhmmss"):
-        raise ValueError(f"Unexpected date format: '{colon_line}'")
-    return datetime.strptime(dt, "%Y%m%d%H%M%S")
-
-
-def date_str(date: datetime) -> str:
-    return date.strftime("%Y%m%d%H%M%S")
+from .dtutil import parse_dnsdatetime, fmt_dnsdatetime, nowutc
 
 
 class KeyFile:
@@ -39,15 +29,15 @@ class KeyFile:
                 if not line.startswith(";"):
                     continue
                 if "Created:" in line:
-                    self.d_create = date_part(line)
+                    self.d_create = parse_dnsdatetime(line)
                 elif "Publish:" in line:
-                    self.d_publish = date_part(line)
+                    self.d_publish = parse_dnsdatetime(line)
                 elif "Activate:" in line:
-                    self.d_active = date_part(line)
+                    self.d_active = parse_dnsdatetime(line)
                 elif "Inactive:" in line:
-                    self.d_inactive = date_part(line)
+                    self.d_inactive = parse_dnsdatetime(line)
                 elif "Delete:" in line:
-                    self.d_delete = date_part(line)
+                    self.d_delete = parse_dnsdatetime(line)
                 elif "This is a " in line and "keyid" in line and "for" in line:
                     words = line.split()
                     if words[4] == "zone-signing":
@@ -72,7 +62,7 @@ class KeyFile:
 
     def state(self, ref=None):
         if ref is None:
-            ref = datetime.now()
+            ref = nowutc()
         if self.d_delete is not None and self.d_delete <= ref:
             return "DEL"
         if self.d_inactive is not None and self.d_inactive <= ref:
@@ -87,7 +77,7 @@ class KeyFile:
 
     def next_change(self, ref=None):
         if ref is None:
-            ref = datetime.now()
+            ref = nowutc()
         # check if the ordering is consistent, but ignore Created
         assigned = list(filter(lambda x: x is not None,
                                [self.d_publish, self.d_active, self.d_inactive, self.d_delete]))
@@ -126,6 +116,7 @@ class KeyFile:
         res = adjust(self.path_pk, pk_perm, pk_owner, pk_grp) or res
         return res
 
+
 class DnsSec:
 
     def __init__(self, path: Path):
@@ -162,13 +153,13 @@ class DnsSec:
                     inactivate: Optional[datetime] = None, delete: Optional[datetime] = None):
         p = []
         if publish is not None:
-            p += ["-P", date_str(publish)]
+            p += ["-P", fmt_dnsdatetime(publish)]
         if activate is not None:
-            p += ["-A", date_str(activate)]
+            p += ["-A", fmt_dnsdatetime(activate)]
         if inactivate is not None:
-            p += ["-I", date_str(inactivate)]
+            p += ["-I", fmt_dnsdatetime(inactivate)]
         if delete is not None:
-            p += ["-D", date_str(delete)]
+            p += ["-D", fmt_dnsdatetime(delete)]
         if p:
             self._call(["dnssec-settime", *p, key.name])
 

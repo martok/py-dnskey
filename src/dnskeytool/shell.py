@@ -1,13 +1,14 @@
 #!/usr/bin/env -S python3 -u
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pprint import pprint
-from typing import Optional
 
 from .util import groupby_freeze
 from .dnssec import DnsSec, KeyFile
+from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
+    fmt_datetime_relative, nowutc
 
 
 def shortest_unique(*choices):
@@ -39,57 +40,6 @@ def parse_table_sort(inp: str) -> str:
     return inp.upper()
 
 
-def parse_datetime_relative(inp: str) -> timedelta:
-    # number of seconds
-    try:
-        ts = int(inp)
-        return timedelta(seconds=ts)
-    except ValueError:
-        pass
-    try:
-        if inp.endswith("m"):
-            return timedelta(minutes=int(inp[:-1]))
-        if inp.endswith("h"):
-            return timedelta(hours=int(inp[:-1]))
-        if inp.endswith("d"):
-            return timedelta(days=int(inp[:-1]))
-        if inp.endswith("w"):
-            return timedelta(weeks=int(inp[:-1]))
-    except ValueError:
-        pass
-    raise ValueError(f"{inp} is not a valid relative date/time value")
-
-
-def parse_datetime(inp: str) -> datetime:
-    # DNS timestamp format YYYYMMDDHHmmss
-    if len(inp) == 14 and inp.startswith("20"):
-        try:
-            y = int(inp[0:4])
-            m = int(inp[4:6])
-            d = int(inp[6:8])
-            h = int(inp[8:10])
-            n = int(inp[10:12])
-            s = int(inp[12:14])
-            return datetime(y, m, d, h, n, s)
-        except ValueError:
-            pass
-    # unix timestamp (seconds)
-    try:
-        ts = int(inp)
-        return datetime.fromtimestamp(ts)
-    except ValueError:
-        pass
-    # ISO format
-    try:
-        return datetime.fromisoformat(inp)
-    except ValueError:
-        pass
-    # time relative to now
-    if inp.startswith("+"):
-        return datetime.now() + parse_datetime_relative(inp[1:])
-    raise ValueError(f"{inp} is not a valid date/time value")
-
-
 def sort_by_field(field: str):
     if field == "ZONE":
         return lambda k: k.zone
@@ -107,49 +57,7 @@ def fmt_next_change(ref: datetime, key: KeyFile) -> str:
     n = key.next_change(ref=ref)
     if n is None:
         return "-"
-    return str(n)
-
-
-def fmt_timespan(span: timedelta, compressed=True) -> str:
-    sec = int(span.total_seconds())
-    MINSEC = 60
-    HOURSEC = MINSEC * 60
-    DAYSEC = HOURSEC * 24
-    WEEKSEC = DAYSEC * 7
-    YEARSEC = DAYSEC * 365
-    s = []
-    if sec >= YEARSEC * 1.2:
-        s.append(f"{sec // YEARSEC}y")
-        sec = sec % YEARSEC
-    if sec >= WEEKSEC * 1.2:
-        s.append(f"{sec // WEEKSEC}w")
-        sec = sec % WEEKSEC
-    if sec >= DAYSEC * 1.2:
-        s.append(f"{sec // DAYSEC}d")
-        sec = sec % DAYSEC
-    if sec >= HOURSEC * 1.2:
-        s.append(f"{sec // HOURSEC}h")
-        sec = sec % HOURSEC
-    if sec >= MINSEC * 1.2:
-        s.append(f"{sec // MINSEC}m")
-        sec = sec % MINSEC
-    if sec >= 0:
-        s.append(f"{sec}s")
-    if compressed:
-        s = s[:1]
-    return "".join(s)
-
-
-def fmt_datetime_relative(ref: datetime, date: Optional[datetime], compressed=True) -> str:
-    if date is None:
-        return "-"
-    if date > ref:
-        sign = "+"
-        rel = date - ref
-    else:
-        sign = "-"
-        rel = ref - date
-    return sign + fmt_timespan(rel, compressed)
+    return n.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
@@ -157,9 +65,9 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     if args.when:
         when = args.when
     else:
-        when = datetime.now()
+        when = nowutc()
     if args.state:
-        keys = filter(lambda k: k.state == args.state, keys)
+        keys = filter(lambda k: k.state(when) == args.state, keys)
     if args.type:
         keys = filter(lambda k: k.type == args.type, keys)
     if args.sort:
@@ -177,7 +85,7 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         # crea publ acti inac dele
         fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s} ")
     else:
-        fields.append(f"{'Next Key Event':20s}")
+        fields.append(f"{'Next Key Event':16s}")
     print(" ".join(fields))
 
     for key in keys:
@@ -193,8 +101,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             fields.append(f"{fmt_datetime_relative(when, key.d_inactive):>4s}")
             fields.append(f"{fmt_datetime_relative(when, key.d_delete):>4s}")
         else:
-            fields.append(f"{fmt_next_change(when, key):20s}")
         print(" ".join(fields))
+            fields.append(f"{fmt_next_change(when, key):16s}")
         if args.print_record:
             print(f"{'':{zone_width}s}", key.dnskey_rr())
     print("")

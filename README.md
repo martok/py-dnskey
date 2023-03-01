@@ -105,6 +105,8 @@ For absolute points in time, the following syntaxes are accepted:
 | YYYY-MM-DD[*HH[:MM[:SS[.fff[fff]]]][+HH:MM[:SS[.ffffff]]]] | ISO 8601, as processed by [Python][pyiso] | 2022-07-29     |
 | +FMT                                                       | Relative time to now, as described above  | +8w            |
 
+If not explicitly specified (only possible in ISO8601 format), any date is assumed to be in UTC. 
+
 [pyiso]: https://docs.python.org/3/library/datetime.html#datetime.datetime.fromisoformat
 
 ## Key Rotation
