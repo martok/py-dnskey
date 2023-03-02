@@ -38,7 +38,7 @@ positional arguments:
         -p, --permissions     Print asterisk for keys with bad permissions
         --print-record        Output DNSKEY RR payload in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
-        --resolver RESOLVER   Resolver to use instead of system default.
+        --resolver ADDR       Resolver to use instead of system default.
         -4
         -6                    Prefer IPV4 or IPv6 for communcation with nameservers (default: IPv6)
 
@@ -118,7 +118,8 @@ Using `list` with `--verify-ns` queries nameservers for the current (public) sta
 
 The results are displayed in additional columns. The first column is always `Parent` and contains `DS` if the corrresponding
 DS record exists. One more column is generated for each nameserver queried for the zone and containts the letter `P` if
-the key is published as a DNSKEY record and the letter `S` if it is used in any RRSIG signature.
+the key is published as a DNSKEY record and the letter `S` if it is used in any RRSIG signature. In case of lookup errors,
+`ERR` is displayed.
 
 ## Key Rotation
 

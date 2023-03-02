@@ -8,7 +8,7 @@ from pprint import pprint
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
-from .lookup import PublishedKeyCollection
+from .lookup import PublishedKeyCollection, shorten_dns
 from .util import groupby_freeze
 
 
@@ -61,8 +61,8 @@ def fmt_next_change(ref: datetime, key: KeyFile) -> str:
     return n.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 
-def fmt_server_name(name:str):
-    return name
+def fmt_server_name(name: str):
+    return shorten_dns(name)
 
 
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
@@ -88,7 +88,7 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         print("Zone: ", args.ZONE)
     if args.calendar:
         # crea publ acti inac dele
-        fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s} ")
+        fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s}")
     else:
         fields.append(f"{'Next Key Event':16s}")
     if args.verify_ns:
@@ -106,7 +106,6 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             print(zone, end=" ")
             key_collection.query_zone(zone)
         print("")
-        fields.append(f"{'Parent':6s}")
         for ns in key_collection.contacted_servers():
             fields.append(fmt_server_name(ns))
 
@@ -127,17 +126,31 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         else:
             fields.append(f"{fmt_next_change(when, key):16s}")
         if args.verify_ns:
+            zonens = key_collection.contacted_servers()
             ksig = key.signer_id()
-            active_ds = ksig in key_collection.zone_ds[key.zone]
-            fields.append(f"{'DS' if active_ds else '':6s}")
-            for ns in key_collection.contacted_servers():
-                l = len(fmt_server_name(ns))
-                flags = ""
-                if ksig in key_collection.zone_dnskey[key.zone][ns]:
-                    flags += "P"
-                if ksig in key_collection.zone_signers[key.zone][ns]:
-                    flags += "S"
-                fields.append(f"{flags:{l}s}")
+            dskeys = key_collection.zone_ds[key.zone]
+            dnskeys = key_collection.zone_dnskey[key.zone]
+            signers = key_collection.zone_signers[key.zone]
+            # DS state at the resolver
+            nsl = len(fmt_server_name(zonens[0]))
+            if isinstance(dskeys, Exception):
+                active_ds = "ERR"
+            else:
+                active_ds = "DS" if ksig in dskeys else ""
+            fields.append(f"{active_ds:{nsl}s}")
+            # DNSKEY + RRSIG state at defined NS
+            for ns in zonens[1:]:
+                nsl = len(fmt_server_name(ns))
+                flags = []
+                # was this server queried for this zone?
+                if ns in dnskeys and ns in signers:
+                    # was that successful?
+                    if isinstance(dnskeys[ns], Exception) or isinstance(signers[ns], Exception):
+                        flags.append("ERR")
+                    else:
+                        flags.append("P" if ksig in dnskeys[ns] else " ")
+                        flags.append("S" if ksig in signers[ns] else " ")
+                fields.append(f"{' '.join(flags):{nsl}s}")
         print(" ".join(fields))
         if args.print_record:
             print(f"{'':{zone_width}s}", key.dnskey_rr())
@@ -338,7 +351,7 @@ def main():
     p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")
-    p_list.add_argument("--resolver", type=str,
+    p_list.add_argument("--resolver", type=str, metavar="ADDR",
                         help="Resolver to use instead of system default.")
     pg_ip = p_list.add_mutually_exclusive_group()
     pg_ip.add_argument("-4", dest="ip", action="store_const", const=4)

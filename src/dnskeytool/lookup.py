@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import List, Dict, Optional, Union
 
 import dns.dnssec
@@ -17,6 +18,7 @@ class PublishedKeyCollection:
         self.explicit_nameservers: Optional[List[str]] = None
         self.prefer_v4 = False
         self.resolver: Optional[str] = None
+        self.used_resolver: Optional[str] = None
         self.known_zones = set()
         self.zone_ds: Dict[str, ListOrError] = dict()
         self.zone_dnskey: Dict[str, Dict[str, ListOrError]] = dict()
@@ -41,6 +43,7 @@ class PublishedKeyCollection:
         #      (should be currently active ZSKs)
         try:
             answer = self._lookup(zone, "DS")
+            self.used_resolver = answer.nameserver
             self.zone_ds[zone] = sorted(set(self._store_ds(ds) for ds in answer))
         except dns.exception.DNSException as e:
             self.zone_ds[zone] = e
@@ -123,4 +126,18 @@ class PublishedKeyCollection:
         return f"{sig.algorithm:03d}+{sig.key_tag:05d}"
 
     def contacted_servers(self):
-        return sorted(set(ns for zn in self.zone_dnskey.values() for ns in zn.keys()))
+        zonens = sorted(set(ns for zn in self.zone_dnskey.values() for ns in zn.keys()))
+        zonens.insert(0, self.used_resolver)
+        return zonens
+
+
+def shorten_dns(name: str) -> str:
+    if dns.inet.is_address(name):
+        return name
+    try:
+        nam = dns.name.from_text(name).canonicalize()
+        labels = [lab[:1] if i > 0 else lab for i, lab in enumerate(nam.labels)]
+        snam = dns.name.Name(labels)
+        return snam.to_text()
+    except ValueError:
+        return name
