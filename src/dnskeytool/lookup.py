@@ -13,6 +13,14 @@ import dns.resolver
 ListOrError = Union[dns.exception.DNSException, List[str]]
 
 
+def find_rrsets(query: dns.rrset.RRset, section: List[dns.rrset.RRset]) -> List[dns.rrset.RRset]:
+    matching = []
+    for rrset in section:
+        if rrset.name == query.name and rrset.rdclass == query.rdclass and rrset.rdtype == query.rdtype:
+            matching.extend(rrset)
+    return matching
+
+
 class PublishedKeyCollection:
     def __init__(self) -> None:
         self.explicit_nameservers: Optional[List[str]] = None
@@ -82,16 +90,15 @@ class PublishedKeyCollection:
             answer = resolver.resolve(zone, what, tcp=True)
             return answer
         except dns.resolver.NoAnswer as na:
-            # special casing for RRSIG queries, which would not work since they are grouped differently and
-            # don't pass the normal full_match routine
+            # special casing some common failures of Resolver:
+            #   - RRSIG queries, which would not work since they are grouped by covers
+            #   - NS queries at the nic, which are returned in the AUTHORITY section (not ANSWER)
             r: dns.message.Message = na.kwargs["response"]
             q = r.question[0]
             if q.rdtype == dns.rdatatype.RRSIG:
-                matching = []
-                for rrset in r.answer:
-                    if rrset.name == q.name and rrset.rdclass == q.rdclass and rrset.rdtype == q.rdtype:
-                        matching.extend(rrset)
-                return matching
+                return find_rrsets(q, r.answer)
+            if q.rdtype == dns.rdatatype.NS:
+                return find_rrsets(q, r.authority)
             raise na
 
     def _resolve(self, name: str):
