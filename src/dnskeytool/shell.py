@@ -72,7 +72,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     else:
         when = nowutc()
     if args.state:
-        keys = filter(lambda k: k.state(when) == args.state, keys)
+        states = set(args.state)
+        keys = filter(lambda k: k.state(when) in states, keys)
     if args.type:
         keys = filter(lambda k: k.type == args.type, keys)
     if args.sort:
@@ -331,7 +332,7 @@ def main():
                         help="DNS zone to work on")
     p_list.add_argument("-r", "--recurse", action="store_true", default=False,
                         help="Show key for all zones below the given one")
-    p_list.add_argument("-s", "--state", choices=parse_state.CHOICES, default="", type=parse_state, metavar="STATE",
+    p_list.add_argument("-s", "--state", choices=parse_state.CHOICES, action="append", default=[], type=parse_state, metavar="STATE",
                         help="Filter keys by current state")
     p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
                         help="Filter keys by type")

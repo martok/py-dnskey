@@ -19,7 +19,7 @@ options:
 
 positional arguments:
   COMMAND
-    list [-h] [-r] [-s {PUB,ACT,INAC,DEL,FUT}] ZONE
+    list [OPTIONS *] ZONE
       List currently present keys and their timing
 
       positional arguments:
@@ -44,7 +44,7 @@ positional arguments:
 
 
 
-    archive [-h] [-r] [-n] [--auto] ZONE TARGET
+    archive [OPTIONS *] ZONE TARGET
       Move expired keys to archive location
 
       positional arguments:
@@ -56,7 +56,7 @@ positional arguments:
         -n, --dry-run  Don't perform action, just show plan
         --auto         Automatically append year of inactivation to TARGET
 
-    rotate [-h] -t {ZSK,KSK} [-n] [-b INTERVAL] [-l INTERVAL] [-o INTERVAL] [-a INTERVAL] ZONE
+    rotate -t {ZSK,KSK} [OPTIONS *] ZONE
       Rotate keys based on lifetime
 
       positional arguments:
@@ -75,7 +75,7 @@ positional arguments:
         -a INTERVAL, --postpublish INTERVAL
                               Time to publish keys after their deactivation date (Default: 1w)
 
-    permissions [-h] [-n] FILES [FILES ...]
+    permissions [OPTIONS *] FILES [FILES ...]
       Fix file permissions
 
       positional arguments:
