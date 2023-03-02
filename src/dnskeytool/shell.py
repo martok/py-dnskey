@@ -340,8 +340,10 @@ def main():
                              "If no specific server given, query all NS set for each zone.")
     p_list.add_argument("--resolver", type=str,
                         help="Resolver to use instead of system default.")
-    p_list.add_argument("--ip", choices=[4, 6], default=6, type=int, metavar="FAMILY",
-                        help="Prefer IPv4 or IPv6 for communcation with nameservers (default: IPv6)")
+    pg_ip = p_list.add_mutually_exclusive_group()
+    pg_ip.add_argument("-4", dest="ip", action="store_const", const=4)
+    pg_ip.add_argument("-6", dest="ip", action="store_const", const=6, default=6,
+                       help="Prefer IPv4 or IPv6 for communcation with nameservers (default: IPv6)")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",

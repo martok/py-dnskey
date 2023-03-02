@@ -39,7 +39,9 @@ positional arguments:
         --print-record        Output DNSKEY RR payload in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
         --resolver RESOLVER   Resolver to use instead of system default.
-        --ip FAMILY           Prefer IPv4 or IPv6 for communcation with nameservers (default: 6)
+        -4
+        -6                    Prefer IPV4 or IPv6 for communcation with nameservers (default: IPv6)
+
 
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
