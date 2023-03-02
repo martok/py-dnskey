@@ -27,16 +27,19 @@ positional arguments:
 
       options:
         -r, --recurse         Show key for all zones below the given one
-        --when DATETIME       When computing states, use DATETIME instead of current
-        -s, --state {PUB,ACT,INAC,DEL,FUT}
+        -s STATE, --state STATE
                               Filter keys by current state
-        -t, --type {ZSK,KSK}
+        -t {ZSK,KSK}, --type {ZSK,KSK}
                               Filter keys by type
-        -o, --sort {ZONE,ALG,ID,STATE,DATE}
+        --when DATETIME       When computing states, use DATETIME instead of current
+        -o FIELD, --sort FIELD
                               Sort keys by attribute
-        --print-record        Output DNSKEY RR payload in table
         -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
         -p, --permissions     Print asterisk for keys with bad permissions
+        --print-record        Output DNSKEY RR payload in table
+        --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
+        --resolver RESOLVER   Resolver to use instead of system default.
+        --ip FAMILY           Prefer IPv4 or IPv6 for communcation with nameservers (default: 6)
 
 
     archive [-h] [-r] [-n] [--auto] ZONE TARGET
@@ -58,7 +61,6 @@ positional arguments:
         ZONE                  DNS zone to work on
 
       options:
-        -h, --help            show this help message and exit
         -t {ZSK,KSK}, --type {ZSK,KSK}
                               Filter keys by type
         -n, --dry-run         Don't perform action, just show plan
@@ -78,7 +80,6 @@ positional arguments:
         FILES          File or shell pattern to match, excluding file extension
 
       options:
-        -h, --help     show this help message and exit
         -n, --dry-run  Don't perform action, just show files that would be changed
 
 ```
@@ -108,6 +109,14 @@ For absolute points in time, the following syntaxes are accepted:
 If not explicitly specified (only possible in ISO8601 format), any date is assumed to be in UTC. 
 
 [pyiso]: https://docs.python.org/3/library/datetime.html#datetime.datetime.fromisoformat
+
+## Nameserver Verification
+
+Using `list` with `--verify-ns` queries nameservers for the current (public) state of the zones and keys.
+
+The results are displayed in additional columns. The first column is always `Parent` and contains `DS` if the corrresponding
+DS record exists. One more column is generated for each nameserver queried for the zone and containts the letter `P` if
+the key is published as a DNSKEY record and the letter `S` if it is used in any RRSIG signature.
 
 ## Key Rotation
 

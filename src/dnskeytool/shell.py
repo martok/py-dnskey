@@ -5,10 +5,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pprint import pprint
 
-from .util import groupby_freeze
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
+from .lookup import PublishedKeyCollection
+from .util import groupby_freeze
 
 
 def shortest_unique(*choices):
@@ -17,7 +18,7 @@ def shortest_unique(*choices):
             s = func(inp)
             # simple cases: not given or direct match?
             if s == "" or s in choices:
-                return inp
+                return s
             # uniquely specified?
             matching = [c for c in choices if c.startswith(s)]
             if len(matching) == 1:
@@ -60,6 +61,10 @@ def fmt_next_change(ref: datetime, key: KeyFile) -> str:
     return n.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 
+def fmt_server_name(name:str):
+    return name
+
+
 def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = tool.list_keys(args.ZONE, recursive=args.recurse)
     if args.when:
@@ -86,6 +91,25 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s} ")
     else:
         fields.append(f"{'Next Key Event':16s}")
+    if args.verify_ns:
+        key_collection = PublishedKeyCollection()
+        if args.resolver:
+            key_collection.set_resolver(args.resolver)
+        if args.ip == 4:
+            key_collection.prefer_v4 = True
+        servers = [ns for ns in args.verify_ns if ns is not None]
+        if servers:
+            key_collection.set_explicit_nameservers(servers)
+        zones = {k.zone for k in keys}
+        print("Collecting state of zone: ", end="")
+        for zone in zones:
+            print(zone, end=" ")
+            key_collection.query_zone(zone)
+        print("")
+        fields.append(f"{'Parent':6s}")
+        for ns in key_collection.contacted_servers():
+            fields.append(fmt_server_name(ns))
+
     print(" ".join(fields))
 
     for key in keys:
@@ -101,8 +125,20 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             fields.append(f"{fmt_datetime_relative(when, key.d_inactive):>4s}")
             fields.append(f"{fmt_datetime_relative(when, key.d_delete):>4s}")
         else:
-        print(" ".join(fields))
             fields.append(f"{fmt_next_change(when, key):16s}")
+        if args.verify_ns:
+            ksig = key.signer_id()
+            active_ds = ksig in key_collection.zone_ds[key.zone]
+            fields.append(f"{'DS' if active_ds else '':6s}")
+            for ns in key_collection.contacted_servers():
+                l = len(fmt_server_name(ns))
+                flags = ""
+                if ksig in key_collection.zone_dnskey[key.zone][ns]:
+                    flags += "P"
+                if ksig in key_collection.zone_signers[key.zone][ns]:
+                    flags += "S"
+                fields.append(f"{flags:{l}s}")
+        print(" ".join(fields))
         if args.print_record:
             print(f"{'':{zone_width}s}", key.dnskey_rr())
     print("")
@@ -277,25 +313,35 @@ def main():
 
     p_list = sp.add_parser("list",
                            help="List currently present keys and their timing")
+    # selection options
     p_list.add_argument("ZONE", type=str,
                         help="DNS zone to work on")
-    p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
-                        help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-r", "--recurse", action="store_true", default=False,
                         help="Show key for all zones below the given one")
     p_list.add_argument("-s", "--state", choices=parse_state.CHOICES, default="", type=parse_state, metavar="STATE",
                         help="Filter keys by current state")
     p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
                         help="Filter keys by type")
+    # output options
+    p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
+                        help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-o", "--sort", choices=parse_table_sort.CHOICES, default="", type=parse_table_sort,
                         metavar="FIELD",
                         help="Sort keys by attribute")
-    p_list.add_argument("--print-record", action="store_true", default=False,
-                        help="Output DNSKEY RR payload in table")
     p_list.add_argument("-c", "--calendar", action="store_true", default=False,
                         help="Show relative time to each state change (default: only timestamp of next change)")
     p_list.add_argument("-p", "--permissions", action="store_true", default=False,
                         help="Print asterisk for keys with bad permissions")
+    # additional functions / checks
+    p_list.add_argument("--print-record", action="store_true", default=False,
+                        help="Output DNSKEY RR payload in table")
+    p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
+                        help="Query nameserver(s) for actually present keys. "
+                             "If no specific server given, query all NS set for each zone.")
+    p_list.add_argument("--resolver", type=str,
+                        help="Resolver to use instead of system default.")
+    p_list.add_argument("--ip", choices=[4, 6], default=6, type=int, metavar="FAMILY",
+                        help="Prefer IPv4 or IPv6 for communcation with nameservers (default: IPv6)")
     p_list.set_defaults(func=main_list)
 
     p_archive = sp.add_parser("archive",

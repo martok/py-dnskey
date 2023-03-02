@@ -58,7 +58,10 @@ class KeyFile:
         return f"{self.zone}+{self.algo:03d}+{self.keyid:05d}"
 
     def sort_key(self):
-        return f"{self.zone}+{self.type}+{self.algo:3d}+{self.keyid:5d}"
+        return f"{self.zone}+{self.type}+{self.algo:03d}+{self.keyid:05d}"
+
+    def signer_id(self):
+        return f"{self.algo:03d}+{self.keyid:05d}"
 
     def state(self, ref=None):
         if ref is None:
