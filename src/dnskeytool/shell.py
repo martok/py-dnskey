@@ -51,7 +51,7 @@ def sort_by_field(field: str):
     elif field == "STATE":
         return lambda k: k.state()
     elif field == "DATE":
-        return lambda k: k.next_change() or datetime(3000, 1, 1)
+        return lambda k: k.next_change() or datetime(3000, 1, 1, tzinfo=timezone.utc)
 
 
 def fmt_next_change(ref: datetime, key: KeyFile) -> str:
