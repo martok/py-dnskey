@@ -132,26 +132,29 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             dskeys = key_collection.zone_ds[key.zone]
             dnskeys = key_collection.zone_dnskey[key.zone]
             signers = key_collection.zone_signers[key.zone]
-            # DS state at the resolver
-            nsl = len(fmt_server_name(zonens[0]))
-            if isinstance(dskeys, Exception):
-                active_ds = "ERR"
-            else:
-                active_ds = "DS" if ksig in dskeys else ""
-            fields.append(f"{active_ds:{nsl}s}")
-            # DNSKEY + RRSIG state at defined NS
-            for ns in zonens[1:]:
+            # fill the table columns
+            for ns in zonens:
                 nsl = len(fmt_server_name(ns))
-                flags = []
-                # was this server queried for this zone?
-                if ns in dnskeys and ns in signers:
-                    # was that successful?
+                if ns in dskeys:
+                    # was this server queried for DS state at the resolver?
+                    if isinstance(dskeys[ns], Exception):
+                        active_ds = "ERR"
+                    else:
+                        active_ds = "DS" if ksig in dskeys[ns] else ""
+                    fields.append(f"{active_ds:{nsl}s}")
+                elif ns in dnskeys and ns in signers:
+                    # was this server queried for DNSKEY + RRSIG state at defined NS?
+                    flags = []
                     if isinstance(dnskeys[ns], Exception) or isinstance(signers[ns], Exception):
                         flags.append("ERR")
                     else:
                         flags.append("P" if ksig in dnskeys[ns] else " ")
                         flags.append("S" if ksig in signers[ns] else " ")
-                fields.append(f"{' '.join(flags):{nsl}s}")
+                    fields.append(f"{' '.join(flags):{nsl}s}")
+                else:
+                    # no information in this column
+                    fields.append(f"{'':{nsl}s}")
+
         print(" ".join(fields))
         if args.print_record:
             print(f"{'':{zone_width}s}", key.dnskey_rr())

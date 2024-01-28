@@ -26,9 +26,8 @@ class PublishedKeyCollection:
         self.explicit_nameservers: Optional[List[str]] = None
         self.prefer_v4 = False
         self.resolver: Optional[str] = None
-        self.used_resolver: Optional[str] = None
         self.known_zones = set()
-        self.zone_ds: Dict[str, ListOrError] = dict()
+        self.zone_ds: Dict[str, Dict[str, ListOrError]] = dict()
         self.zone_dnskey: Dict[str, Dict[str, ListOrError]] = dict()
         self.zone_signers: Dict[str, Dict[str, ListOrError]] = dict()
 
@@ -49,15 +48,21 @@ class PublishedKeyCollection:
         #      (should be active + pre/postpublished ZSKs and KSKs, signed by active KSKs from DS)
         #   the DNSKEYs currently used in RRSIGs on other RRs
         #      (should be currently active ZSKs)
-        try:
-            answer = self._lookup(zone, "DS")
-            self.used_resolver = answer.nameserver
-            self.zone_ds[zone] = sorted(set(self._store_ds(ds) for ds in answer))
-        except dns.exception.DNSException as e:
-            self.zone_ds[zone] = e
-        query_servers = self._get_ns_list(zone)
+        self.zone_ds.setdefault(zone, dict())
         self.zone_dnskey.setdefault(zone, dict())
         self.zone_signers.setdefault(zone, dict())
+        try:
+            answer = self._lookup(zone, "DS")
+            self.zone_ds[zone][answer.nameserver] = sorted(set(self._store_ds(ds) for ds in answer))
+        except dns.resolver.NoAnswer as na:
+            # no DS keys published
+            self.zone_ds[zone][na.nameserver] = []
+        except dns.exception.DNSException as e:
+            self.zone_ds[zone]["ERR"] = e
+        try:
+            query_servers = self._get_ns_list(zone)
+        except dns.exception.DNSException as e:
+            query_servers = []
         for ns in query_servers:
             nsip = self._resolve(ns)
             try:
@@ -99,6 +104,8 @@ class PublishedKeyCollection:
                 return find_rrsets(q, r.answer)
             if q.rdtype == dns.rdatatype.NS:
                 return find_rrsets(q, r.authority)
+            # fake any nameserver response
+            na.nameserver = resolver.nameservers[-1]
             raise na
 
     def _resolve(self, name: str):
@@ -133,9 +140,9 @@ class PublishedKeyCollection:
         return f"{sig.algorithm:03d}+{sig.key_tag:05d}"
 
     def contacted_servers(self):
+        dsns = sorted(set(ns for zn in self.zone_ds.values() for ns in zn.keys()))
         zonens = sorted(set(ns for zn in self.zone_dnskey.values() for ns in zn.keys()))
-        zonens.insert(0, self.used_resolver)
-        return zonens
+        return list(dsns) + list(zonens)
 
 
 def shorten_dns(name: str) -> str:
