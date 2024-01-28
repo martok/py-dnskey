@@ -79,7 +79,7 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     if args.sort:
         keys = sorted(keys, key=sort_by_field(args.sort))
     keys = list(keys)
-    zone_width = max(len(k.zone) for k in keys) if keys else 0
+    zone_width = max(len(k.zone) for k in keys) if keys else 4
     fields = [f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s}"]
     if args.permissions:
         fields.insert(0, f"{'Perms':^5s}")
@@ -104,11 +104,13 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         zones = {k.zone for k in keys}
         print("Collecting state of zone: ", end="")
         for zone in zones:
-            print(zone, end=" ")
+            print(zone, end=" ", flush=True)
             key_collection.query_zone(zone)
         print("")
+        print("Responses from nameservers: ", " ".join(key_collection.contacted_servers()))
+        print("")
         for ns in key_collection.contacted_servers():
-            fields.append(fmt_server_name(ns))
+            fields.append(fmt_server_name(ns) if ns is not None else "?")
 
     print(" ".join(fields))
 
