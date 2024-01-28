@@ -9,22 +9,15 @@ import dns.rdtypes.ANY.DS
 import dns.rdtypes.ANY.RRSIG
 import dns.resolver
 
+from .resolver import BaseResolver, StubResolver
+
 ListOrError = Union[dns.exception.DNSException, List[str]]
 
 
-def find_rrsets(query: dns.rrset.RRset, section: List[dns.rrset.RRset]) -> List[dns.rrset.RRset]:
-    matching = []
-    for rrset in section:
-        if rrset.name == query.name and rrset.rdclass == query.rdclass and rrset.rdtype == query.rdtype:
-            matching.extend(rrset)
-    return matching
-
-
 class PublishedKeyCollection:
-    def __init__(self) -> None:
+    def __init__(self, resolver: BaseResolver) -> None:
         self.explicit_nameservers: Optional[List[str]] = None
-        self.prefer_v4 = False
-        self.resolver: Optional[str] = None
+        self.resolver = resolver
         self.known_zones = set()
         self.zone_ds: Dict[str, Dict[str, ListOrError]] = dict()
         self.zone_dnskey: Dict[str, Dict[str, ListOrError]] = dict()
@@ -32,9 +25,6 @@ class PublishedKeyCollection:
 
     def set_explicit_nameservers(self, servers: List[str]):
         self.explicit_nameservers = servers
-
-    def set_resolver(self, resolver: str):
-        self.resolver = resolver
 
     def query_zone(self, zone: str):
         if zone in self.known_zones:
@@ -50,28 +40,48 @@ class PublishedKeyCollection:
         self.zone_ds.setdefault(zone, dict())
         self.zone_dnskey.setdefault(zone, dict())
         self.zone_signers.setdefault(zone, dict())
-        try:
-            answer = self._lookup(zone, "DS")
-            self.zone_ds[zone][answer.nameserver] = sorted(set(self._store_ds(ds) for ds in answer))
-        except dns.resolver.NoAnswer as na:
-            # no DS keys published
-            self.zone_ds[zone][na.nameserver] = []
-        except dns.exception.DNSException as e:
-            self.zone_ds[zone]["ERR"] = e
+
+        # If the user requested multiple resolvers, query each individually
+        expl_roots = self.resolver.explicit_resolvers()
+        if expl_roots is not None:
+            for pubres in expl_roots:
+                try:
+                    answer = self.resolver.query_at(zone, "DS", pubres)
+                    self.zone_ds[zone][answer.nameserver] = sorted(set(self._store_ds(ds) for ds in answer))
+                except dns.resolver.NoAnswer as na:
+                    # no DS keys published
+                    self.zone_ds[zone][pubres] = []
+                except dns.exception.DNSException as e:
+                    self.zone_ds[zone][pubres] = e
+        else:
+            # Otherwise, let OS handle it
+            try:
+                answer = self.resolver.query(zone, "DS")
+                self.zone_ds[zone][answer.nameserver] = sorted(set(self._store_ds(ds) for ds in answer))
+            except dns.resolver.NoAnswer as na:
+                # no DS keys published
+                self.zone_ds[zone][na.nameserver] = []
+            except dns.exception.DNSException as e:
+                self.zone_ds[zone]["ERR"] = e
+
         try:
             query_servers = self._get_ns_list(zone)
         except dns.exception.DNSException as e:
             query_servers = []
         for ns in query_servers:
-            nsip = self._resolve(ns)
+            nsip = self.resolver.resolve_host(ns)
             try:
-                answer = self._lookup(zone, "DNSKEY", nsip)
+                answer = self.resolver.query_at(zone, "DNSKEY", nsip)
                 self.zone_dnskey[zone][ns] = sorted(set(self._store_dnskey(dnskey) for dnskey in answer))
+            except dns.resolver.NoAnswer as na:
+                self.zone_dnskey[zone][ns] = []
             except dns.exception.DNSException as e:
                 self.zone_dnskey[zone][ns] = e
             try:
-                answer = self._lookup(zone, "RRSIG", nsip)
+                answer = self.resolver.query_at(zone, "RRSIG", nsip)
                 self.zone_signers[zone][ns] = sorted(set(self._store_rrsig(sig) for sig in answer))
+            except dns.resolver.NoAnswer as na:
+                self.zone_dnskey[zone][ns] = []
             except dns.exception.DNSException as e:
                 self.zone_signers[zone][ns] = e
         self.known_zones.add(zone)
@@ -80,50 +90,9 @@ class PublishedKeyCollection:
         # user-defined server list
         if self.explicit_nameservers:
             return self.explicit_nameservers
-        # query system-default resolver to find who is responsible, then query these
-        answer = self._lookup(zone, "NS")
+        # query resolver to find who is responsible, then query these
+        answer = self.resolver.query(zone, "NS")
         return [rr.target.canonicalize().to_text() for rr in answer]
-
-    def _lookup(self, zone: str, what: str, where: Optional[str] = None):
-        resolver = dns.resolver.Resolver()
-        if where is not None:
-            resolver.nameservers = [where]
-        elif self.resolver is not None:
-            resolver.nameservers = [self.resolver]
-        try:
-            answer = resolver.resolve(zone, what, tcp=True)
-            return answer
-        except dns.resolver.NoAnswer as na:
-            # special casing some common failures of Resolver:
-            #   - RRSIG queries, which would not work since they are grouped by covers
-            #   - NS queries at the nic, which are returned in the AUTHORITY section (not ANSWER)
-            r: dns.message.Message = na.kwargs["response"]
-            q = r.question[0]
-            if q.rdtype == dns.rdatatype.RRSIG:
-                return find_rrsets(q, r.answer)
-            if q.rdtype == dns.rdatatype.NS:
-                return find_rrsets(q, r.authority)
-            # fake any nameserver response
-            na.nameserver = resolver.nameservers[-1]
-            raise na
-
-    def _resolve(self, name: str):
-        if dns.inet.is_address(name):
-            return name
-        resolver = dns.resolver.Resolver()
-        if self.resolver is not None:
-            resolver.nameservers = [self.resolver]
-        af_order = ["A", "AAAA"] if self.prefer_v4 else ["AAAA", "A"]
-        for af in af_order:
-            try:
-                answer = resolver.resolve(name, af)
-                for a in answer:
-                    return a.address
-            except dns.resolver.LifetimeTimeout:
-                pass
-            except dns.resolver.NoAnswer:
-                pass
-        raise ValueError(f"Could not resolve any IP address of '{name}' at {str(resolver.nameservers)}")
 
     @staticmethod
     def _store_ds(ds: dns.rdtypes.ANY.DS.DS):

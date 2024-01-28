@@ -9,6 +9,7 @@ from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
 from .lookup import PublishedKeyCollection, shorten_dns
+from .resolver import StubResolver
 from .util import groupby_freeze
 
 
@@ -93,11 +94,9 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     else:
         fields.append(f"{'Next Key Event':16s}")
     if args.verify_ns:
-        key_collection = PublishedKeyCollection()
-        if args.resolver:
-            key_collection.set_resolver(args.resolver)
-        if args.ip == 4:
-            key_collection.prefer_v4 = True
+        res = StubResolver(args.resolver)
+        res.prefer_v4 = args.ip == 4
+        key_collection = PublishedKeyCollection(res)
         servers = [ns for ns in args.verify_ns if ns is not None]
         if servers:
             key_collection.set_explicit_nameservers(servers)
@@ -363,8 +362,8 @@ def main():
     p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")
-    p_list.add_argument("--resolver", type=str, metavar="ADDR",
-                        help="Resolver to use instead of system default.")
+    p_list.add_argument("--resolver", type=str, metavar="ADDR", action="append",
+                        help="Resolver(s) to use instead of system default.")
     pg_ip = p_list.add_mutually_exclusive_group()
     pg_ip.add_argument("-4", dest="ip", action="store_const", const=4)
     pg_ip.add_argument("-6", dest="ip", action="store_const", const=6, default=6,
