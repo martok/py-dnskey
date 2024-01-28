@@ -36,7 +36,7 @@ positional arguments:
                               Sort keys by attribute
         -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
         -p, --permissions     Print asterisk for keys with bad permissions
-        --print-record        Output DNSKEY RR payload in table
+        --print-record        Output DNSKEY RR payload and DS record (for KSKs) in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
         --resolver ADDR       Resolver to use instead of system default.
         -4

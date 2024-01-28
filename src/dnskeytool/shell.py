@@ -157,7 +157,13 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
 
         print(" ".join(fields))
         if args.print_record:
-            print(f"{'':{zone_width}s}", key.dnskey_rr())
+            align = 6 + (zone_width if args.recurse else 0)
+            if key.type == "KSK":
+                try:
+                    print(key.ds_rr(indent=f"{'':{align}s}"))
+                except:
+                    pass
+            print(key.dnskey_rr(indent=f"{'':{align}s}"))
     print("")
     return 0
 
@@ -351,7 +357,7 @@ def main():
                         help="Print asterisk for keys with bad permissions")
     # additional functions / checks
     p_list.add_argument("--print-record", action="store_true", default=False,
-                        help="Output DNSKEY RR payload in table")
+                        help="Output DNSKEY RR payload and DS record (for KSKs) in table")
     p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")

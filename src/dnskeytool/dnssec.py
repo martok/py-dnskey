@@ -1,9 +1,12 @@
 import shutil
 import subprocess
 import sys
+import textwrap
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+import dns.rdata
 
 from .dtutil import parse_dnsdatetime, fmt_dnsdatetime, nowutc
 
@@ -89,13 +92,30 @@ class KeyFile:
             return next(filter(lambda x: x > ref, assigned), None)
         return "Inconsistent Dates"
 
-    def dnskey_rr(self):
+    @staticmethod
+    def _wrap_rr(text: str, initial_indent: str=""):
+        return textwrap.wrap(text, width=128, initial_indent=initial_indent, subsequent_indent=initial_indent + "    ", break_long_words=False)
+
+    def dnskey_rr(self, *, indent=""):
         ret = []
         with self.path_rr.open("rt") as key:
             for line in key.readlines():
                 if not line.startswith(";") and "DNSKEY" in line:
-                    ret.append(line.split("DNSKEY")[1].strip())
-        return "\n".join(ret).strip()
+                    key = line.split("DNSKEY")[1].strip()
+                    key = self._wrap_rr(key, indent)
+                    ret.extend(key)
+        return "\n".join(ret)
+
+    def ds_rr(self, *, indent=""):
+        # Try native first
+        rr = self.dnskey_rr()
+        try:
+            abs_zone = dns.name.from_text(self.zone)
+            dnskey = dns.rdata.from_text(dns.rdataclass.IN, dns.rdatatype.DNSKEY, rr.replace("\n", " "))
+            ds = dns.dnssec.make_ds(abs_zone, dnskey, dns.dnssec.DSDigest.SHA256)
+            return "\n".join(self._wrap_rr("DS " + ds.to_text().upper(), indent))
+        except dns.exception.DNSException:
+            return ""
 
     def set_perms(self, *,
                   rr_perm: int = 0o644, rr_owner: str = "root", rr_grp: str = "bind",
