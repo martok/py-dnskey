@@ -54,7 +54,7 @@ class PublishedKeyCollection:
                 except dns.exception.DNSException as e:
                     self.zone_ds[zone][pubres] = e
         else:
-            # Otherwise, let OS handle it
+            # Otherwise, let resolver handle it
             try:
                 answer = self.resolver.query(zone, "DS")
                 self.zone_ds[zone][answer.nameserver] = sorted(set(self._store_ds(ds) for ds in answer))

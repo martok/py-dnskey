@@ -9,7 +9,7 @@ from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
 from .lookup import PublishedKeyCollection, shorten_dns
-from .resolver import StubResolver
+from .resolver import StubResolver, RecursiveResolver
 from .util import groupby_freeze
 
 
@@ -94,7 +94,10 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     else:
         fields.append(f"{'Next Key Event':16s}")
     if args.verify_ns:
-        res = StubResolver(args.resolver)
+        if args.resolver == "RECURSE":
+            res = RecursiveResolver()
+        else:
+            res = StubResolver(args.resolver)
         res.prefer_v4 = args.ip == 4
         key_collection = PublishedKeyCollection(res)
         servers = [ns for ns in args.verify_ns if ns is not None]
@@ -363,7 +366,8 @@ def main():
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")
     p_list.add_argument("--resolver", type=str, metavar="ADDR", action="append",
-                        help="Resolver(s) to use instead of system default.")
+                        help="Resolver(s) to use instead of system default, or the special keyword 'recurse' to switch"
+                             " to an internal recursive resolver")
     pg_ip = p_list.add_mutually_exclusive_group()
     pg_ip.add_argument("-4", dest="ip", action="store_const", const=4)
     pg_ip.add_argument("-6", dest="ip", action="store_const", const=6, default=6,
@@ -422,6 +426,13 @@ def main():
             raise IOError(f"Key directory '{args.dir}' not found!")
     else:
         keydir = Path.cwd()
+
+    if "resolver" in args and args.resolver:
+        has_rec = sum(r.upper() == "RECURSE" for r in args.resolver)
+        if has_rec > 0:
+            if has_rec != len(args.resolver):
+                parser.error(f"Internal recursive resolver can not be combined with external resolvers")
+            args.resolver = "RECURSE"
 
     if "ZONE" in args and args.ZONE:
         if not args.ZONE.endswith("."):

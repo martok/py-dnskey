@@ -38,7 +38,8 @@ positional arguments:
         -p, --permissions     Print asterisk for keys with bad permissions
         --print-record        Output DNSKEY RR payload and DS record (for KSKs) in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
-        --resolver ADDR       Resolver to use instead of system default.
+        --resolver ADDR       Resolver to use instead of system default, or the special keyword "recurse" to switch
+                              to an internal recursive resolver
         -4
         -6                    Prefer IPV4 or IPv6 for communcation with nameservers (default: IPv6)
 
