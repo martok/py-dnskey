@@ -34,7 +34,18 @@ class BaseResolver:
         pass
 
     def resolve_host(self, hostname: str) -> str:
-        pass
+        if dns.inet.is_address(hostname):
+            return hostname
+        for af in self._af_order():
+            try:
+                answer = self.query(hostname, af)
+                for a in answer:
+                    return a.address
+            except dns.resolver.LifetimeTimeout:
+                pass
+            except dns.resolver.NoAnswer:
+                pass
+        raise ValueError(f"Could not resolve any IP address of '{hostname}'")
 
 
 class StubResolver(BaseResolver):
@@ -77,23 +88,6 @@ class StubResolver(BaseResolver):
         if self.servers:
             resolver.nameservers = self.servers
         return self._query(zone, what, resolver)
-
-    def resolve_host(self, hostname: str) -> str:
-        if dns.inet.is_address(hostname):
-            return hostname
-        resolver = dns.resolver.Resolver()
-        if self.servers:
-            resolver.nameservers = self.servers
-        for af in self._af_order():
-            try:
-                answer = resolver.resolve(hostname, af)
-                for a in answer:
-                    return a.address
-            except dns.resolver.LifetimeTimeout:
-                pass
-            except dns.resolver.NoAnswer:
-                pass
-        raise ValueError(f"Could not resolve any IP address of '{hostname}' at {str(resolver.nameservers)}")
 
 
 class RecursiveResolver(BaseResolver):
@@ -140,20 +134,6 @@ class RecursiveResolver(BaseResolver):
             where,
             53,
         )
-
-    def resolve_host(self, hostname: str) -> str:
-        if dns.inet.is_address(hostname):
-            return hostname
-        for af in self._af_order():
-            try:
-                answer = self.query(hostname, af)
-                for a in answer:
-                    return a.address
-            except dns.resolver.LifetimeTimeout:
-                pass
-            except dns.resolver.NoAnswer:
-                pass
-        raise ValueError(f"Could not resolve any IP address of '{hostname}'")
 
     def _expand_root_servers(self) -> Iterator[str]:
         if self.prefer_v4:
