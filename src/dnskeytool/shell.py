@@ -4,7 +4,11 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pprint import pprint
+from typing import List
 
+import dns
+
+from tui import shortest_unique, SplitAppendArgs
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
@@ -13,23 +17,17 @@ from .resolver import StubResolver, RecursiveResolver
 from .util import groupby_freeze
 
 
-def shortest_unique(*choices):
-    def wrapped(func):
-        def parser(inp: str):
-            s = func(inp)
-            # simple cases: not given or direct match?
-            if s == "" or s in choices:
-                return s
-            # uniquely specified?
-            matching = [c for c in choices if c.startswith(s)]
-            if len(matching) == 1:
-                return matching[0]
-            raise ValueError(f"Ambiguous argument {s}, could mean one of {' '.join(matching)}")
+class ResolverArgs(SplitAppendArgs):
 
-        parser.CHOICES = choices
-        return parser
+    def filter(self, arg):
+        if dns.inet.is_address(arg):
+            return arg
+        if arg.upper() == "RECURSE":
+            return arg
+        raise ValueError(f"Invalid argument for resolver: {arg}")
 
-    return wrapped
+    def combine(self, oldlist: List, newlist: List) -> List:
+        return list(set(oldlist).union(newlist))
 
 
 @shortest_unique("PUB", "ACT", "INAC", "DEL", "FUT")
@@ -365,9 +363,9 @@ def main():
     p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")
-    p_list.add_argument("--resolver", type=str, metavar="ADDR", action="append",
+    p_list.add_argument("--resolver", type=str, metavar="ADDR", action=ResolverArgs,
                         help="Resolver(s) to use instead of system default, or the special keyword 'recurse' to switch"
-                             " to an internal recursive resolver")
+                             " to an internal recursive resolver. Can be combined and given multiple times, unless 'recurse' is used.")
     pg_ip = p_list.add_mutually_exclusive_group()
     pg_ip.add_argument("-4", dest="ip", action="store_const", const=4)
     pg_ip.add_argument("-6", dest="ip", action="store_const", const=6, default=6,

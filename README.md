@@ -38,8 +38,8 @@ positional arguments:
         -p, --permissions     Print asterisk for keys with bad permissions
         --print-record        Output DNSKEY RR payload and DS record (for KSKs) in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
-        --resolver ADDR       Resolver to use instead of system default, or the special keyword "recurse" to switch
-                              to an internal recursive resolver
+        --resolver ADDR[,ADDR] Resolver to use instead of system default, or the special keyword "recurse" to switch
+                               to an internal recursive resolver. Can be combined and given multiple times, unless "recurse" is used.
         -4
         -6                    Prefer IPV4 or IPv6 for communcation with nameservers (default: IPv6)
 
@@ -94,7 +94,7 @@ For relative time, the following syntaxes are accepted:
 | Syntax | Description | Example |
 |--------|-------------|---------|
 | #      | seconds     | 42      |
-| #s     | Minutes     | 60m     |
+| #m     | Minutes     | 60m     |
 | #h     | Hours       | 24h     |
 | #d     | Days        | 7d      |
 | #w     | Weeks       | 4w      |
