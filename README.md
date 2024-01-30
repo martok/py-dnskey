@@ -31,6 +31,9 @@ positional arguments:
                               Filter keys by current state
         -t {ZSK,KSK}, --type {ZSK,KSK}
                               Filter keys by type
+        -O {GRID,TABLE,JSON}, --output {GRID,TABLE,JSON}
+                              Format output as table or JSON
+
         --when DATETIME       When computing states, use DATETIME instead of current
         -o FIELD, --sort FIELD
                               Sort keys by attribute

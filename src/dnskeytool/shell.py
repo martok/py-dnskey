@@ -8,7 +8,7 @@ from typing import List
 
 import dns
 
-from tui import shortest_unique, SplitAppendArgs
+from .tui import shortest_unique, SplitAppendArgs, TablePrinter, JSONPrinter
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
@@ -37,6 +37,11 @@ def parse_state(inp: str) -> str:
 
 @shortest_unique("ZONE", "ALG", "ID", "STATE", "DATE")
 def parse_table_sort(inp: str) -> str:
+    return inp.upper()
+
+
+@shortest_unique("GRID", "TABLE", "JSON")
+def parse_output_format(inp: str) -> str:
     return inp.upper()
 
 
@@ -79,18 +84,34 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         keys = sorted(keys, key=sort_by_field(args.sort))
     keys = list(keys)
     zone_width = max(len(k.zone) for k in keys) if keys else 4
-    fields = [f"{'Type':6s} {'Algo':>5s} {'ID':>5s} {'State':7s}"]
-    if args.permissions:
-        fields.insert(0, f"{'Perms':^5s}")
+
+    if args.output == "JSON":
+        printer = JSONPrinter()
+    elif args.output in ["TABLE", "GRID"]:
+        printer = TablePrinter()
+        printer.with_grid = args.output == "GRID"
+    else:
+        raise ValueError("Invalid output format")
+    printer.start_header()
     if args.recurse:
-        fields.insert(0, f"{'Zone':{zone_width}s}")
+        printer.add("Zone", w=zone_width)
     else:
         print("Zone: ", args.ZONE)
+    if args.permissions:
+        printer.add("Perms", w=5, align="^")
+    printer.add("Type", w=6)
+    printer.add("Algo", w=5, align=">")
+    printer.add("ID", w=5, align=">")
+    printer.add("State", w=7, align=">")
     if args.calendar:
         # crea publ acti inac dele
-        fields.append(f"{'Crea':>4s} {'Pub':>4s} {'Act':>4s} {'Inac':>4s} {'Del':>4s}")
+        printer.add("Crea", w=4, align=">")
+        printer.add("Pub", w=4, align=">")
+        printer.add("Act", w=4, align=">")
+        printer.add("Inac", w=4, align=">")
+        printer.add("Del", w=4, align=">")
     else:
-        fields.append(f"{'Next Key Event':16s}")
+        printer.add("Next Key Event", w=16)
     if args.verify_ns:
         if args.resolver == "RECURSE":
             res = RecursiveResolver()
@@ -110,24 +131,27 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         print("Responses from nameservers: ", " ".join(key_collection.contacted_servers()))
         print("")
         for ns in key_collection.contacted_servers():
-            fields.append(fmt_server_name(ns) if ns is not None else "?")
-
-    print(" ".join(fields))
+            printer.add(fmt_server_name(ns) if ns is not None else "?")
+    printer.done()
 
     for key in keys:
-        fields = [f"{key.type:6s} {key.algo:5d} {key.keyid:5d} {key.state(when):7s}"]
-        if args.permissions:
-            fields.insert(0, f"{'*' if key.set_perms(check_only=True) else '':^5s}")
+        printer.start_row()
         if args.recurse:
-            fields.insert(0, f"{key.zone:{zone_width}s}")
+            printer.add(key.zone)
+        if args.permissions:
+            printer.add('*' if key.set_perms(check_only=True) else '')
+        printer.add(key.type)
+        printer.add(key.algo)
+        printer.add(key.keyid)
+        printer.add(key.state(when))
         if args.calendar:
-            fields.append(f"{fmt_datetime_relative(when, key.d_create):>4s}")
-            fields.append(f"{fmt_datetime_relative(when, key.d_publish):>4s}")
-            fields.append(f"{fmt_datetime_relative(when, key.d_active):>4s}")
-            fields.append(f"{fmt_datetime_relative(when, key.d_inactive):>4s}")
-            fields.append(f"{fmt_datetime_relative(when, key.d_delete):>4s}")
+            printer.add(fmt_datetime_relative(when, key.d_create))
+            printer.add(fmt_datetime_relative(when, key.d_publish))
+            printer.add(fmt_datetime_relative(when, key.d_active))
+            printer.add(fmt_datetime_relative(when, key.d_inactive))
+            printer.add(fmt_datetime_relative(when, key.d_delete))
         else:
-            fields.append(f"{fmt_next_change(when, key):16s}")
+            printer.add(fmt_next_change(when, key))
         if args.verify_ns:
             zonens = key_collection.contacted_servers()
             ksig = key.signer_id()
@@ -136,14 +160,13 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
             signers = key_collection.zone_signers[key.zone]
             # fill the table columns
             for ns in zonens:
-                nsl = len(fmt_server_name(ns))
                 if ns in dskeys:
                     # was this server queried for DS state at the resolver?
                     if isinstance(dskeys[ns], Exception):
                         active_ds = "ERR"
                     else:
                         active_ds = "DS" if ksig in dskeys[ns] else ""
-                    fields.append(f"{active_ds:{nsl}s}")
+                    printer.add(active_ds)
                 elif ns in dnskeys and ns in signers:
                     # was this server queried for DNSKEY + RRSIG state at defined NS?
                     flags = []
@@ -152,20 +175,20 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
                     else:
                         flags.append("P" if ksig in dnskeys[ns] else " ")
                         flags.append("S" if ksig in signers[ns] else " ")
-                    fields.append(f"{' '.join(flags):{nsl}s}")
+                    printer.add(" ".join(flags))
                 else:
                     # no information in this column
-                    fields.append(f"{'':{nsl}s}")
-
-        print(" ".join(fields))
+                    printer.add("")
+        printer.done()
         if args.print_record:
-            align = 6 + (zone_width if args.recurse else 0)
+            align = printer.column_start("Algo")
             if key.type == "KSK":
                 try:
                     print(key.ds_rr(indent=f"{'':{align}s}"))
                 except:
                     pass
             print(key.dnskey_rr(indent=f"{'':{align}s}"))
+    printer.done()
     print("")
     return 0
 
@@ -348,6 +371,9 @@ def main():
     p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
                         help="Filter keys by type")
     # output options
+    p_list.add_argument("-O", "--output", choices=parse_output_format.CHOICES, default=parse_output_format.CHOICES[0], type=parse_output_format,
+                        metavar="FORMAT",
+                        help="Format output as table or JSON")
     p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
                         help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-o", "--sort", choices=parse_table_sort.CHOICES, default="", type=parse_table_sort,
