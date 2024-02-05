@@ -55,11 +55,19 @@ def sort_by_field(field: str):
     elif field == "STATE":
         return lambda k: k.state()
     elif field == "DATE":
-        return lambda k: k.next_change() or datetime(3000, 1, 1, tzinfo=timezone.utc)
+        def sorter(k):
+            try:
+                return k.next_change() or datetime(3000, 1, 1, tzinfo=timezone.utc)
+            except ValueError:
+                return datetime(1000, 1, 1, tzinfo=timezone.utc)
+        return sorter
 
 
 def fmt_next_change(ref: datetime, key: KeyFile) -> str:
-    n = key.next_change(ref=ref)
+    try:
+        n = key.next_change(ref=ref)
+    except ValueError as e:
+        return str(e)
     if n is None:
         return "-"
     return n.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")

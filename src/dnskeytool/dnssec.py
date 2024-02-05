@@ -90,7 +90,7 @@ class KeyFile:
         expected_order = list(sorted(assigned))
         if expected_order == assigned:
             return next(filter(lambda x: x > ref, assigned), None)
-        return "Inconsistent Dates"
+        raise ValueError("Inconsistent Dates")
 
     @staticmethod
     def _wrap_rr(text: str, initial_indent: str=""):
