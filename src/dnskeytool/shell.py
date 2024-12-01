@@ -149,7 +149,7 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         if args.permissions:
             printer.add('*' if key.set_perms(check_only=True) else '')
         printer.add(key.type)
-        printer.add(key.algo)
+        printer.add(key.algo * (-1 if key.is_supported() is False else 1))
         printer.add(key.keyid)
         printer.add(key.state(when))
         if args.calendar:

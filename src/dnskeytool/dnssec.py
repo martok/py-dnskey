@@ -117,6 +117,16 @@ class KeyFile:
         except dns.exception.DNSException:
             return ""
 
+    def is_supported(self) -> Optional[bool]:
+        from .data.supported_keys import SUPPORTED_ALG_TLD
+        labels = self.zone.split(".")
+        for last in reversed(range(1, len(labels))):
+            check = ".".join(labels[-last-1:-1])
+            supp = SUPPORTED_ALG_TLD.get(check, None)
+            if supp is not None:
+                return self.algo in supp
+        return None
+
     def set_perms(self, *,
                   rr_perm: int = 0o644, rr_owner: str = "root", rr_grp: str = "bind",
                   pk_perm: int = 0o600, pk_owner: str = "bind", pk_grp: str = "bind",
