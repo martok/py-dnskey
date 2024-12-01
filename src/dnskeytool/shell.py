@@ -233,7 +233,7 @@ def main_archive(tool: DnsSec, args: argparse.Namespace) -> int:
             print("  ", typ, " ", src, " -> ", dst)
         else:
             dst.mkdir(parents=True, exist_ok=True)
-            src.rename(dst)
+            src.rename(dst / src.name)
     return 0
 
 
