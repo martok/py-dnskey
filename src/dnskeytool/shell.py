@@ -171,15 +171,17 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
                 if ns in dskeys:
                     # was this server queried for DS state at the resolver?
                     if isinstance(dskeys[ns], Exception):
-                        active_ds = "ERR"
+                        active_ds = repr(dskeys[ns])[:4]
                     else:
                         active_ds = "DS" if ksig in dskeys[ns] else ""
                     printer.add(active_ds)
                 elif ns in dnskeys and ns in signers:
                     # was this server queried for DNSKEY + RRSIG state at defined NS?
                     flags = []
-                    if isinstance(dnskeys[ns], Exception) or isinstance(signers[ns], Exception):
-                        flags.append("ERR")
+                    if isinstance(dnskeys[ns], Exception):
+                        flags.append(repr(dnskeys[ns])[:4])
+                    elif isinstance(signers[ns], Exception):
+                        flags.append(repr(signers[ns])[:6])
                     else:
                         flags.append("P" if ksig in dnskeys[ns] else " ")
                         flags.append("S" if ksig in signers[ns] else " ")
