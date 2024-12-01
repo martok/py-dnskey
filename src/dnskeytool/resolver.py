@@ -91,23 +91,6 @@ class StubResolver(BaseResolver):
 
 
 class RecursiveResolver(BaseResolver):
-    ROOT_SERVERS = [
-        # as of January 24, 2024
-        ("A.ROOT-SERVERS.NET.", "198.41.0.4", "2001:503:b3e::2:30"),
-        ("B.ROOT-SERVERS.NET.", "170.247.170.2", "2801:1b8:10::b"),
-        ("C.ROOT-SERVERS.NET.", "192.33.4.12", "2001:500:2::c"),
-        ("D.ROOT-SERVERS.NET.", "199.7.91.13", "2001:500:2d::d"),
-        ("E.ROOT-SERVERS.NET.", "192.203.230.10", "2001:500:8::e"),
-        ("F.ROOT-SERVERS.NET.", "192.5.5.241", "2001:500:2f::f"),
-        ("G.ROOT-SERVERS.NET.", "192.112.36.4", "2001:500:12::d0d"),
-        ("H.ROOT-SERVERS.NET.", "198.97.190.53", "2001:500:1::53"),
-        ("I.ROOT-SERVERS.NET.", "192.36.148.17", "2001:7fe::53"),
-        ("J.ROOT-SERVERS.NET.", "192.58.128.30", "2001:503:c27::2:30"),
-        ("K.ROOT-SERVERS.NET.", "193.0.14.129", "2001:7fd::1"),
-        ("L.ROOT-SERVERS.NET.", "199.7.83.42", "2001:500:9f::42"),
-        ("M.ROOT-SERVERS.NET.", "202.12.27.33", "2001:dc3::35"),
-    ]
-
     def __init__(self) -> None:
         super().__init__()
         self._query_cache = dict()
@@ -136,12 +119,13 @@ class RecursiveResolver(BaseResolver):
         )
 
     def _expand_root_servers(self) -> Iterator[str]:
+        from .data.dns import ROOT_SERVERS
         if self.prefer_v4:
-            yield from (v4 for h, v4, v6 in self.ROOT_SERVERS)
-            yield from (v6 for h, v4, v6 in self.ROOT_SERVERS)
+            yield from (v4 for h, v4, v6 in ROOT_SERVERS)
+            yield from (v6 for h, v4, v6 in ROOT_SERVERS)
         else:
-            yield from (v6 for h, v4, v6 in self.ROOT_SERVERS)
-            yield from (v4 for h, v4, v6 in self.ROOT_SERVERS)
+            yield from (v6 for h, v4, v6 in ROOT_SERVERS)
+            yield from (v4 for h, v4, v6 in ROOT_SERVERS)
 
     @staticmethod
     def _addr_from_additional(adds: List[dns.rrset.RRset]):
