@@ -46,21 +46,26 @@ def parse_output_format(inp: str) -> str:
 
 
 def sort_by_field(field: str):
-    if field == "ZONE":
-        return lambda k: k.zone
-    elif field == "ALG":
-        return lambda k: k.algo
-    elif field == "ID":
-        return lambda k: k.keyid
-    elif field == "STATE":
-        return lambda k: k.state()
-    elif field == "DATE":
-        def sorter(k):
-            try:
-                return k.next_change() or datetime(3000, 1, 1, tzinfo=timezone.utc)
-            except ValueError:
-                return datetime(1000, 1, 1, tzinfo=timezone.utc)
-        return sorter
+    match field:
+        case "ZONE":
+            return lambda k: k.zone
+        case "TYPE":
+            return lambda k: k.type
+        case "ALG":
+            return lambda k: k.algo
+        case "ID":
+            return lambda k: k.keyid
+        case "STATE":
+            return lambda k: k.state()
+        case "DATE":
+            def sorter(k):
+                try:
+                    return k.next_change() or datetime(3000, 1, 1, tzinfo=timezone.utc)
+                except ValueError:
+                    return datetime(1000, 1, 1, tzinfo=timezone.utc)
+            return sorter
+        case _:
+            raise ValueError(f"Invalid sort field: {field}")
 
 
 def fmt_next_change(ref: datetime, key: KeyFile) -> str:
@@ -93,13 +98,14 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = list(keys)
     zone_width = max(len(k.zone) for k in keys) if keys else 4
 
-    if args.output == "JSON":
-        printer = JSONPrinter()
-    elif args.output in ["TABLE", "GRID"]:
-        printer = TablePrinter()
-        printer.with_grid = args.output == "GRID"
-    else:
-        raise ValueError("Invalid output format")
+    match args.output:
+        case "JSON":
+            printer = JSONPrinter()
+        case "TABLE" | "GRID":
+            printer = TablePrinter()
+            printer.with_grid = args.output == "GRID"
+        case _:
+            raise ValueError("Invalid output format")
     printer.start_header()
     if args.recurse:
         printer.add("Zone", w=zone_width)

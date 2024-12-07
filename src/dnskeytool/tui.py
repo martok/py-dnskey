@@ -78,20 +78,21 @@ class TablePrinterBase:
                   f="s", align="", w: Optional[int] = None):
         if not isinstance(val, str):
             val = str(val)
-        if self.state == "head":
-            if w is None:
-                w = len(val)
-            head = self.get_formatted(val, f, align, w)
-            self.current_row.append(head)
-            self.column_meta.append({"width": len(head), "align": align, "name": val})
-        elif self.state == "row":
-            coli = len(self.current_row)
-            w = self.column_meta[coli].get("width", 0)
-            if not align:
-                align = self.column_meta[coli].get("align", align)
-            self.current_row.append(self.get_formatted(val, f, align, w))
-        else:
-            raise ValueError("Invalid state")
+        match self.state:
+            case "head":
+                if w is None:
+                    w = len(val)
+                head = self.get_formatted(val, f, align, w)
+                self.current_row.append(head)
+                self.column_meta.append({"width": len(head), "align": align, "name": val})
+            case "row":
+                coli = len(self.current_row)
+                w = self.column_meta[coli].get("width", 0)
+                if not align:
+                    align = self.column_meta[coli].get("align", align)
+                self.current_row.append(self.get_formatted(val, f, align, w))
+            case _:
+                raise ValueError("Invalid state")
 
 
 class TablePrinter(TablePrinterBase):
@@ -134,8 +135,9 @@ class JSONPrinter(TablePrinterBase):
 
     def done(self):
         super().done()
-        if self.state == "head":
-            for meta in self.column_meta:
-                meta["width"] = 0
-        elif self.state == "done":
-            print(json.dumps(self.obj, indent=2))
+        match self.state:
+            case "head":
+                for meta in self.column_meta:
+                    meta["width"] = 0
+            case "done":
+                print(json.dumps(self.obj, indent=2))
