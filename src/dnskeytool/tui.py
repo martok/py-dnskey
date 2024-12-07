@@ -1,28 +1,11 @@
 import argparse
+import dataclasses
 import json
-from typing import List, Any, Optional
+from operator import attrgetter
+from typing import List, Any, Optional, Union, Callable
 
 
-def shortest_unique(*choices):
-    def wrapped(func):
-        def parser(inp: str):
-            s = func(inp)
-            # simple cases: not given or direct match?
-            if s == "" or s in choices:
-                return s
-            # uniquely specified?
-            matching = [c for c in choices if c.startswith(s)]
-            if len(matching) == 1:
-                return matching[0]
-            raise ValueError(f"Ambiguous argument {s}, could mean one of {' '.join(matching)}")
-
-        parser.CHOICES = choices
-        return parser
-
-    return wrapped
-
-
-class SplitAppendArgs(argparse.Action):
+class ListAppendAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         oldlist = getattr(namespace, self.dest) or []
         newlist = [self.filter(value.strip()) for value in values.split(",")]
@@ -33,6 +16,150 @@ class SplitAppendArgs(argparse.Action):
 
     def combine(self, oldlist: List, newlist: List) -> List:
         return oldlist + newlist
+
+
+class EnumAction(argparse.Action):
+    def __init__(self, option_strings, dest, required=False, help=None, metavar=None,
+                 choices=None, default=None, case_sensitive=False, allow_abbrev=True):
+        if not choices:
+            choices = []
+        if not case_sensitive:
+            choices = [str(c).upper() for c in choices]
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=None,
+            required=required,
+            help=help,
+            metavar=metavar,
+            choices=None)
+        # rename this because otherwise ArgumentParser._check_value would use it
+        self.values = choices
+        self.case_sensitive = case_sensitive
+        self.allow_abbrev = allow_abbrev
+        if not metavar:
+            self.metavar = self.choices_str()
+        if default is not None:
+            self.default = self.parse(default)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        stored = getattr(namespace, self.dest, None)
+        try:
+            value = self.parse(values)
+            setattr(namespace, self.dest, value)
+        except (TypeError, ValueError):
+            args = {'type': self.__class__.__name__, 'value': values}
+            msg = argparse._('invalid %(type)s value: %(value)r')
+            raise argparse.ArgumentError(self, msg % args)
+
+    def choices_str(self):
+        choice_strs = [str(choice) for choice in self.values]
+        return "{%s}" % ",".join(choice_strs)
+
+    def parse(self, arg_str: str):
+        split = self.split_values(arg_str)
+        parsed = self.parse_values(split)
+        self.check_parsed(parsed)
+        return self.create_type(parsed)
+
+    def split_values(self, values: str) -> List[str]:
+        return [values]
+
+    def parse_values(self, values: List[str]):
+        return [self.matched_value(v) for v in values]
+
+    def matched_value(self, s: str):
+        if not self.case_sensitive:
+            s = s.upper()
+        # simple cases: not given or direct match?
+        if s == "" or s in self.values:
+            return s
+        if self.allow_abbrev:
+            # uniquely specified?
+            matching = [c for c in self.values if c.startswith(s)]
+            if not matching:
+                raise ValueError(f"Unknown value {s}")
+            if len(matching) == 1:
+                return matching[0]
+            raise ValueError(f"Ambiguous argument {s}, could mean one of {' '.join(matching)}")
+        raise ValueError(f"Invalid argument {s}")
+
+    def check_parsed(self, parsed):
+        if len(parsed) != 1:
+            raise ValueError(f"Expected a single value of {self.choices_str()}")
+
+    def create_type(self, parsed):
+        return parsed[0]
+
+
+@dataclasses.dataclass
+class MultipleEnumType:
+    values: List[str]
+    suffix: List[bool]
+
+    def as_sets(self):
+        pos = set()
+        neg = set()
+        for v, s in zip(self.values, self.suffix):
+            if s:
+                neg.add(v)
+            else:
+                pos.add(v)
+        return pos, neg
+
+    def as_filter(self, iterable, key=Union[Callable, str]):
+        if isinstance(key, str):
+            key = attrgetter(key)
+        pos, neg = self.as_sets()
+
+        def comparator(x):
+            k = key(x)
+            if k in pos:
+                return True
+            if neg:
+                return k not in neg
+            return False
+        return filter(comparator, iterable)
+
+    def as_multi_sorter(self, iterable, key=None):
+        if key is None:
+            key = attrgetter
+        for fieldname, desc in reversed(list(zip(self.values, self.suffix))):
+            keyfun = key(fieldname)
+            iterable = sorted(iterable, key=keyfun, reverse=desc)
+        return iterable
+
+
+class MultipleEnumAction(EnumAction):
+    def __init__(self, option_strings, dest, required=False, help=None, metavar=None, choices=None, default=None,
+                 case_sensitive=False, allow_abbrev=True, suffix=None):
+        super().__init__(option_strings, dest, required, help, metavar, choices, default, case_sensitive, allow_abbrev)
+        if suffix:
+            if isinstance(suffix, str):
+                self.suffix = suffix
+            else:
+                self.suffix = "-"
+        else:
+            self.suffix = ""
+
+    def split_values(self, values: str) -> List[str]:
+        return values.split(",")
+
+    def matched_value(self, s: str):
+        suffix = False
+        if self.suffix:
+            if s.endswith(self.suffix):
+                s = s[:-len(self.suffix)]
+                suffix = True
+        return super().matched_value(s), suffix
+
+    def check_parsed(self, parsed):
+        if len(set(parsed)) != len(parsed):
+            raise ValueError(f"Duplicated values")
+
+    def create_type(self, parsed):
+        values, suffix = zip(*parsed)
+        return MultipleEnumType(values=values, suffix=suffix)
 
 
 class TablePrinterBase:

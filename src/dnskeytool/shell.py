@@ -8,7 +8,7 @@ from typing import List
 
 import dns
 
-from .tui import shortest_unique, SplitAppendArgs, TablePrinter, JSONPrinter
+from .tui import ListAppendAction, TablePrinter, JSONPrinter, MultipleEnumAction, EnumAction
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
@@ -17,8 +17,7 @@ from .resolver import StubResolver, RecursiveResolver
 from .util import groupby_freeze
 
 
-class ResolverArgs(SplitAppendArgs):
-
+class ResolverListAction(ListAppendAction):
     def filter(self, arg):
         if dns.inet.is_address(arg):
             return arg
@@ -28,21 +27,6 @@ class ResolverArgs(SplitAppendArgs):
 
     def combine(self, oldlist: List, newlist: List) -> List:
         return list(set(oldlist).union(newlist))
-
-
-@shortest_unique("PUB", "ACT", "INAC", "DEL", "FUT")
-def parse_state(inp: str) -> str:
-    return inp.upper()
-
-
-@shortest_unique("ZONE", "ALG", "ID", "STATE", "DATE")
-def parse_table_sort(inp: str) -> str:
-    return inp.upper()
-
-
-@shortest_unique("GRID", "TABLE", "JSON")
-def parse_output_format(inp: str) -> str:
-    return inp.upper()
 
 
 def sort_by_field(field: str):
@@ -89,12 +73,11 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     else:
         when = nowutc()
     if args.state:
-        states = set(args.state)
-        keys = filter(lambda k: k.state(when) in states, keys)
+        keys = args.state.as_filter(keys, key=lambda k: k.state(when))
     if args.type:
-        keys = filter(lambda k: k.type == args.type, keys)
+        keys = args.type.as_filter(keys, key="type")
     if args.sort:
-        keys = sorted(keys, key=sort_by_field(args.sort))
+        keys = args.sort.as_multi_sorter(keys, key=sort_by_field)
     keys = list(keys)
     zone_width = max(len(k.zone) for k in keys) if keys else 4
 
@@ -382,18 +365,18 @@ def main():
                         help="DNS zone to work on")
     p_list.add_argument("-r", "--recurse", action="store_true", default=False,
                         help="Show key for all zones below the given one")
-    p_list.add_argument("-s", "--state", choices=parse_state.CHOICES, action="append", default=[], type=parse_state, metavar="STATE",
+    p_list.add_argument("-s", "--state", action=MultipleEnumAction, metavar="STATE", suffix=True,
+                        choices=["PUB", "ACT", "INAC", "DEL", "FUT"],
                         help="Filter keys by current state")
-    p_list.add_argument("-t", "--type", choices=["ZSK", "KSK"], default="", type=str.upper,
+    p_list.add_argument("-t", "--type", action=MultipleEnumAction, choices=["ZSK", "KSK"],
                         help="Filter keys by type")
     # output options
-    p_list.add_argument("-O", "--output", choices=parse_output_format.CHOICES, default=parse_output_format.CHOICES[0], type=parse_output_format,
-                        metavar="FORMAT",
+    p_list.add_argument("-O", "--output", action=EnumAction, choices=["GRID", "TABLE", "JSON"], default="GRID",
                         help="Format output as table or JSON")
     p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
                         help="When computing states, use DATETIME instead of current")
-    p_list.add_argument("-o", "--sort", choices=parse_table_sort.CHOICES, default="", type=parse_table_sort,
-                        metavar="FIELD",
+    p_list.add_argument("-o", "--sort", action=MultipleEnumAction, metavar="FIELD", suffix=True,
+                        choices=["ZONE", "TYPE", "ALG", "ID", "STATE", "DATE"],
                         help="Sort keys by attribute")
     p_list.add_argument("-c", "--calendar", action="store_true", default=False,
                         help="Show relative time to each state change (default: only timestamp of next change)")
@@ -405,7 +388,7 @@ def main():
     p_list.add_argument("--verify-ns", action="append", type=str, nargs="?", default=[], metavar="SERVER",
                         help="Query nameserver(s) for actually present keys. "
                              "If no specific server given, query all NS set for each zone.")
-    p_list.add_argument("--resolver", type=str, metavar="ADDR", action=ResolverArgs,
+    p_list.add_argument("--resolver", type=str, metavar="ADDR", action=ResolverListAction,
                         help="Resolver(s) to use instead of system default, or the special keyword 'recurse' to switch"
                              " to an internal recursive resolver. Can be combined and given multiple times, unless 'recurse' is used.")
     pg_ip = p_list.add_mutually_exclusive_group()
