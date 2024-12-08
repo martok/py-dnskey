@@ -48,6 +48,8 @@ def sort_by_field(field: str):
                 except ValueError:
                     return datetime(1000, 1, 1, tzinfo=timezone.utc)
             return sorter
+        case "HOST":
+            return lambda k: tuple(reversed(k.zone.split(".")))
         case _:
             raise ValueError(f"Invalid sort field: {field}")
 
@@ -376,7 +378,7 @@ def main():
     p_list.add_argument("--when", default=None, type=parse_datetime, metavar="DATETIME",
                         help="When computing states, use DATETIME instead of current")
     p_list.add_argument("-o", "--sort", action=MultipleEnumAction, metavar="FIELD", suffix=True,
-                        choices=["ZONE", "TYPE", "ALG", "ID", "STATE", "DATE"],
+                        choices=["ZONE", "TYPE", "ALG", "ID", "STATE", "DATE", "HOST"],
                         help="Sort keys by attribute")
     p_list.add_argument("-c", "--calendar", action="store_true", default=False,
                         help="Show relative time to each state change (default: only timestamp of next change)")
