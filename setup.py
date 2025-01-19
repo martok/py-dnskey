@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="dnskeytool",
-    version="0.3.0",
+    version="0.4.0",
     author="Martok",
     author_email="martok@martoks-place.de",
     description="Simple tool for DNSSEC key management",
@@ -26,5 +26,5 @@ setup(
     install_requires=[
         "dnspython",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.10",
 )
