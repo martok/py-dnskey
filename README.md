@@ -100,10 +100,12 @@ For relative time, the following syntaxes are accepted:
 | Syntax | Description | Example |
 |--------|-------------|---------|
 | #      | seconds     | 42      |
-| #m     | Minutes     | 60m     |
+| #mi    | Minutes     | 60mi    |
 | #h     | Hours       | 24h     |
 | #d     | Days        | 7d      |
 | #w     | Weeks       | 4w      |
+| #m     | Months      | 3m      |
+| #y     | Years       | 2y      |
 
 
 For absolute points in time, the following syntaxes are accepted:
