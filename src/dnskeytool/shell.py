@@ -8,7 +8,7 @@ from typing import List
 
 import dns
 
-from .tui import ListAppendAction, TablePrinter, JSONPrinter, MultipleEnumAction, EnumAction
+from .tui import ListAppendAction, TablePrinter, JSONPrinter, ParagraphFormatter, MultipleEnumAction, EnumAction
 from .dnssec import DnsSec, KeyFile
 from .dtutil import parse_datetime_relative, parse_datetime, fmt_timespan, \
     fmt_datetime_relative, nowutc
@@ -361,7 +361,8 @@ def main():
     sp.required = True
 
     p_list = sp.add_parser("list",
-                           help="List currently present keys and their timing")
+                           help="List currently present keys and their timing",
+                           formatter_class=ParagraphFormatter)
     # selection options
     p_list.add_argument("ZONE", type=str,
                         help="DNS zone to work on")

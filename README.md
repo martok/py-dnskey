@@ -29,6 +29,7 @@ positional arguments:
         -r, --recurse         Show key for all zones below the given one
         -s STATE, --state STATE
                               Filter keys by current state
+                              Values: {PUB,ACT,INAC,DEL,FUT}
         -t {ZSK,KSK}, --type {ZSK,KSK}
                               Filter keys by type
         -O {GRID,TABLE,JSON}, --output {GRID,TABLE,JSON}
@@ -37,6 +38,7 @@ positional arguments:
         --when DATETIME       When computing states, use DATETIME instead of current
         -o FIELD, --sort FIELD
                               Sort keys by attribute
+                              Values: {ZONE,TYPE,ALG,ID,STATE,DATE,HOST}
         -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
         -p, --permissions     Print asterisk for keys with bad permissions
         --print-record        Output DNSKEY RR payload and DS record (for KSKs) in table

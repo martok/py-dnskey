@@ -5,6 +5,14 @@ from operator import attrgetter
 from typing import List, Any, Optional, Union, Callable
 
 
+class ParagraphFormatter(argparse.HelpFormatter):
+    def _split_lines(self, text, width):
+        res = []
+        for par in text.splitlines():
+            res.extend(argparse.HelpFormatter._split_lines(self, par, width))
+        return res
+
+
 class ListAppendAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         oldlist = getattr(namespace, self.dest) or []
@@ -39,6 +47,8 @@ class EnumAction(argparse.Action):
         self.allow_abbrev = allow_abbrev
         if not metavar:
             self.metavar = self.choices_str()
+        else:
+            self.help = "\n".join([self.help, "Values: " + self.choices_str()])
         if default is not None:
             self.default = self.parse(default)
 
