@@ -72,7 +72,7 @@ def parse_datetime(inp: str) -> datetime:
     try:
         d = datetime.fromisoformat(inp)
         if d.tzinfo is None:
-            d.replace(tzinfo=timezone.utc)
+            d = d.replace(tzinfo=timezone.utc)
         return d
     except ValueError:
         pass
