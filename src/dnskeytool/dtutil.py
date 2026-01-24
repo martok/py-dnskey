@@ -7,8 +7,11 @@ def nowutc():
 
 
 def parse_dnsdatetime(colon_line: str) -> datetime:
-    words = colon_line.split()
-    dt = words[2]
+    if " " in colon_line:
+        words = colon_line.split()
+        dt = words[2]
+    else:
+        dt = colon_line
     if len(dt) != len("yyyymmddhhmmss"):
         raise ValueError(f"Unexpected date format: '{colon_line}'")
     d = datetime.strptime(dt, "%Y%m%d%H%M%S")

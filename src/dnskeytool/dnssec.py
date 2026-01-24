@@ -31,28 +31,30 @@ class KeyFile:
             for line in key.readlines():
                 if not line.startswith(";"):
                     continue
-                if "Created:" in line:
-                    self.d_create = parse_dnsdatetime(line)
-                elif "Publish:" in line:
-                    self.d_publish = parse_dnsdatetime(line)
-                elif "Activate:" in line:
-                    self.d_active = parse_dnsdatetime(line)
-                elif "Inactive:" in line:
-                    self.d_inactive = parse_dnsdatetime(line)
-                elif "Delete:" in line:
-                    self.d_delete = parse_dnsdatetime(line)
-                elif "This is a " in line and "keyid" in line and "for" in line:
-                    words = line.split()
-                    if words[4] == "zone-signing":
-                        self.type = "ZSK"
-                    elif words[4] == "key-signing":
-                        self.type = "KSK"
-                    else:
-                        raise ValueError(f"Unexpected key type word: '{words[4]}'")
-                    if self.keyid != int(words[7][:-1]):
-                        raise ValueError(f"{self.name} claims to be for id {self.keyid}, but is not!")
-                    if self.zone != words[-1]:
-                        raise ValueError(f"{self.name} claims to be for id {self.zone}, but is not!")
+                words = line.strip(";\n ").split(" ")
+                match words:
+                    case ["Created:", dt, *_]:
+                        self.d_create = parse_dnsdatetime(dt)
+                    case ["Publish:", dt, *_]:
+                        self.d_publish = parse_dnsdatetime(dt)
+                    case["Activate:", dt, *_]:
+                        self.d_active = parse_dnsdatetime(dt)
+                    case ["Inactive:", dt, *_]:
+                        self.d_inactive = parse_dnsdatetime(dt)
+                    case ["Delete:", dt, *_]:
+                        self.d_delete = parse_dnsdatetime(dt)
+                    case ["This", "is", "a", kind, "key,", "keyid", keyid, "for", zone]:
+                        match kind:
+                            case "zone-signing":
+                                self.type = "ZSK"
+                            case "key-signing":
+                                self.type = "KSK"
+                            case _:
+                                raise ValueError(f"Unexpected key type word: '{words[4]}'")
+                        if self.keyid != int(keyid[:-1]):
+                            raise ValueError(f"{self.name} claims to be for id {self.keyid}, but is not!")
+                        if self.zone != zone:
+                            raise ValueError(f"{self.name} claims to be for id {self.zone}, but is not!")
 
     def __repr__(self):
         return f"KeyFile({str(self)})"
