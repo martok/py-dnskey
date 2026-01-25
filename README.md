@@ -121,6 +121,20 @@ If not explicitly specified (only possible in ISO8601 format), any date is assum
 
 [pyiso]: https://docs.python.org/3/library/datetime.html#datetime.datetime.fromisoformat
 
+### Sorting and Filtering
+
+Options like `--state`, `--type` or `--sort` allow giving multiple values as a comma-separated list. Each value may be
+followed by a suffix `-` to indicate inversion.
+In the case of filtering options, an item is shown if it matches a positive value and does not match an inverted value.
+In the case of sorting options, the inversion indicates descending sort order.
+
+Examples:
+
+```
+ --sort alg,date-        sort by algorithm first, then date of next action descending
+ --state ACT-            show any key that is not active
+```
+
 ## Nameserver Verification
 
 Using `list` with `--verify-ns` queries nameservers for the current (public) state of the zones and keys.
