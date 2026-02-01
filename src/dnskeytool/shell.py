@@ -152,34 +152,31 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         else:
             printer.add(fmt_next_change(when, key))
         if args.verify_ns:
-            zonens = key_collection.contacted_servers()
             ksig = key.signer_id()
-            dskeys = key_collection.zone_ds[key.zone]
-            dnskeys = key_collection.zone_dnskey[key.zone]
-            signers = key_collection.zone_signers[key.zone]
+            key_results = key_collection.results[key.zone]
             # fill the table columns
-            for ns in zonens:
-                if ns in dskeys:
-                    # was this server queried for DS state at the resolver?
-                    if isinstance(dskeys[ns], Exception):
-                        active_ds = repr(dskeys[ns])[:4]
-                    else:
-                        active_ds = "DS" if ksig in dskeys[ns] else ""
-                    printer.add(active_ds)
-                elif ns in dnskeys and ns in signers:
-                    # was this server queried for DNSKEY + RRSIG state at defined NS?
-                    flags = []
-                    if isinstance(dnskeys[ns], Exception):
-                        flags.append(repr(dnskeys[ns])[:4])
-                    elif isinstance(signers[ns], Exception):
-                        flags.append(repr(signers[ns])[:6])
-                    else:
-                        flags.append("P" if ksig in dnskeys[ns] else " ")
-                        flags.append("S" if ksig in signers[ns] else " ")
-                    printer.add(" ".join(flags))
+            for ns in key_collection.contacted_servers():
+                column = []
+                if ns in key_results.ds:
+                    # was this server queried for DS state at the delegation?
+                    in_ds = key_results.ds[ns]
+                    if isinstance(in_ds, Exception):
+                        column.append(repr(in_ds)[:6])
+                    elif ksig in in_ds:
+                        column.append("DS")
                 else:
-                    # no information in this column
-                    printer.add("")
+                    # format (non-)presence information for DNSKEY + RRSIG at authoritative NS
+                    in_dnskey = key_results.dnskey.get(ns, [])
+                    in_rrsig = key_results.rrsig.get(ns, [])
+                    # errors override any other input
+                    if isinstance(in_dnskey, Exception):
+                        column = [repr(in_dnskey)[:6]]
+                    if isinstance(in_rrsig, Exception):
+                        column = [repr(in_rrsig)[:6]]
+                    if not column:
+                        column.append(" P"[ksig in in_dnskey])
+                        column.append(" S"[ksig in in_rrsig])
+                printer.add(" ".join(column))
         printer.done()
         if args.print_record:
             align = printer.column_start("Algo")
