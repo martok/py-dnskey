@@ -198,6 +198,7 @@ def main_archive(tool: DnsSec, args: argparse.Namespace) -> int:
     keys = tool.list_keys(args.ZONE, recursive=args.recurse)
     expired = []
     exp_ksk = 0
+    key: KeyFile
     for key in keys:
         if key.state() == "DEL":
             if key.type == "KSK":
@@ -213,6 +214,8 @@ def main_archive(tool: DnsSec, args: argparse.Namespace) -> int:
             tdir = tool.path / args.TARGET
         plan.append([key.type, key.path_rr, tdir])
         plan.append([key.type, key.path_pk, tdir])
+        if key.path_state.exists():
+            plan.append([key.type, key.path_state, tdir])
     if not len(plan):
         return 0
     if args.dry_run:

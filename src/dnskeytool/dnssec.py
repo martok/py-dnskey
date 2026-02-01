@@ -16,6 +16,7 @@ class KeyFile:
     def __init__(self, path: Path):
         self.path_rr = path
         self.path_pk = path.with_suffix(".private")
+        self.path_state = path.with_suffix(".state")
         self.name = path.stem
         ff = path.stem.split("+")
         self.zone = ff[0][1:]
