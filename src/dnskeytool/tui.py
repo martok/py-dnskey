@@ -1,6 +1,7 @@
 import argparse
 import dataclasses
 import json
+from enum import Flag
 from operator import attrgetter
 from typing import List, Any, Optional, Union, Callable
 
@@ -102,6 +103,9 @@ class EnumAction(argparse.Action):
         return parsed[0]
 
 
+FilterKeyFun = Callable[[Any], Union[str, Flag]]
+
+
 @dataclasses.dataclass
 class MultipleEnumType:
     values: List[str]
@@ -117,18 +121,22 @@ class MultipleEnumType:
                 pos.add(v)
         return pos, neg
 
-    def as_filter(self, iterable, key=Union[Callable, str]):
+    def as_filter(self, iterable, key=Union[str, FilterKeyFun]):
         if isinstance(key, str):
             key = attrgetter(key)
         pos, neg = self.as_sets()
 
         def comparator(x):
+            # as set operations, the rule is: accept iff some element of k is in pos and no element of k is in neg
+            # pos and neg can not both be empty, therefore one of the checks always does something.
             k = key(x)
-            if k in pos:
-                return True
-            if neg:
-                return k not in neg
-            return False
+            check = set()
+            if isinstance(k, Flag):
+                check.update(f.name for f in k)
+            else:
+                check.add(k)
+            return (check.isdisjoint(neg)) and (not pos or not check.isdisjoint(pos))
+
         return filter(comparator, iterable)
 
     def as_multi_sorter(self, iterable, key=None):

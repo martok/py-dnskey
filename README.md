@@ -32,6 +32,8 @@ positional arguments:
                               Values: {PUB,ACT,INAC,DEL,FUT}
         -t {ZSK,KSK}, --type {ZSK,KSK}
                               Filter keys by type
+        -n {DS,PUB,SIG}, --ns-state {DS,PUB,SIG}
+                              Filter keys by state at NS (requires --verify-ns)
         -O {GRID,TABLE,JSON}, --output {GRID,TABLE,JSON}
                               Format output as table or JSON
 

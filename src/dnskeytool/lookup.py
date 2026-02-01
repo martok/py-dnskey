@@ -1,3 +1,4 @@
+from enum import Flag, auto
 from typing import List, Dict, Optional, Union, Callable, Any
 
 import dns.dnssec
@@ -15,6 +16,12 @@ ListOrError = Union[dns.exception.DNSException, List[str]]
 NameserverResponses = Dict[str, ListOrError]
 
 
+class KeyUsage(Flag):
+    PUB = auto()
+    SIG = auto()
+    DS = auto()
+
+
 class ZoneInfo:
     def __init__(self):
         super().__init__()
@@ -26,6 +33,16 @@ class ZoneInfo:
         union = set()
         union.update(self.ds.keys(), self.dnskey.keys(), self.rrsig.keys())
         return union
+
+    def get_key_usage(self, keyid: str) -> KeyUsage:
+        res = KeyUsage(0)
+        if any(keyid in lst for lst in self.ds.values() if isinstance(lst, list)):
+            res |= KeyUsage.DS
+        if any(keyid in lst for lst in self.dnskey.values() if isinstance(lst, list)):
+            res |= KeyUsage.PUB
+        if any(keyid in lst for lst in self.rrsig.values() if isinstance(lst, list)):
+            res |= KeyUsage.SIG
+        return res
 
 
 class PublishedKeyCollection:

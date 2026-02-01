@@ -131,6 +131,8 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         print("")
         for ns in key_collection.contacted_servers():
             printer.add(fmt_server_name(ns) if ns is not None else "?")
+        if args.ns_state:
+            keys = args.ns_state.as_filter(keys, key=lambda k: key_collection.results[k.zone].get_key_usage(k.signer_id()))
     printer.done()
 
     for key in keys:
@@ -373,6 +375,8 @@ def main():
                         help="Filter keys by current state")
     p_list.add_argument("-t", "--type", action=MultipleEnumAction, choices=["ZSK", "KSK"],
                         help="Filter keys by type")
+    p_list.add_argument("-n", "--ns-state", action=MultipleEnumAction, choices=["DS", "PUB", "SIG"], suffix=True,
+                        help="Filter keys by state at NS (requires --verify-ns)")
     # output options
     p_list.add_argument("-O", "--output", action=EnumAction, choices=["GRID", "TABLE", "JSON"], default="GRID",
                         help="Format output as table or JSON")
