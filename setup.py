@@ -4,13 +4,13 @@ from setuptools import setup, find_packages
 
 setup(
     name="dnskeytool",
-    version="0.4.0",
+    version="0.5.0",
     author="Martok",
     author_email="martok@martoks-place.de",
     description="Simple tool for DNSSEC key management",
     license="MIT",
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "License :: OSI Approved :: MIT License",
         "Operating System :: POSIX :: Linux",
         "Intended Audience :: System Administrators",
