@@ -92,15 +92,20 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
         case _:
             raise ValueError("Invalid output format")
     printer.start_header()
-    if args.recurse:
-        printer.add("Zone", w=zone_width)
+    if args.file_names:
+        # K{zone.}+010+00377
+        printer.add("File", w=1+zone_width+1+3+1+5)
     else:
-        print("Zone: ", args.ZONE)
+        if args.recurse:
+            printer.add("Zone", w=zone_width)
+        else:
+            print("Zone: ", args.ZONE)
     if args.permissions:
         printer.add("Perms", w=5, align="^")
     printer.add("Type", w=6)
-    printer.add("Algo", w=5, align=">")
-    printer.add("ID", w=5, align=">")
+    if not args.file_names:
+        printer.add("Algo", w=5, align=">")
+        printer.add("ID", w=5, align=">")
     printer.add("State", w=7, align=">")
     if args.calendar:
         # crea publ acti inac dele
@@ -136,14 +141,18 @@ def main_list(tool: DnsSec, args: argparse.Namespace) -> int:
     printer.done()
 
     for key in keys:
+        key: KeyFile
         printer.start_row()
-        if args.recurse:
+        if args.file_names:
+            printer.add(key.name)
+        elif args.recurse:
             printer.add(key.zone)
         if args.permissions:
             printer.add('*' if key.set_perms(check_only=True) else '')
         printer.add(key.type)
-        printer.add(key.algo * (-1 if key.is_supported() is False else 1))
-        printer.add(key.keyid)
+        if not args.file_names:
+            printer.add(key.algo * (-1 if key.is_supported() is False else 1))
+            printer.add(key.keyid)
         printer.add(key.state(when))
         if args.calendar:
             printer.add(fmt_datetime_relative(when, key.d_create))
@@ -389,6 +398,8 @@ def main():
                         help="Show relative time to each state change (default: only timestamp of next change)")
     p_list.add_argument("-p", "--permissions", action="store_true", default=False,
                         help="Print asterisk for keys with bad permissions")
+    p_list.add_argument("-f", "--file-names", action="store_true", default=False,
+                        help="Instead of Zone, Algo and ID columns, print one column with the file name stem")
     # additional functions / checks
     p_list.add_argument("--print-record", action="store_true", default=False,
                         help="Output DNSKEY RR payload and DS record (for KSKs) in table")

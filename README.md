@@ -43,6 +43,7 @@ positional arguments:
                               Values: {ZONE,TYPE,ALG,ID,STATE,DATE,HOST}
         -c, --calendar        Show relative time to each state change (default: only timestamp of next change)
         -p, --permissions     Print asterisk for keys with bad permissions
+        -f, --file-names      Instead of Zone, Algo and ID columns, print one column with the file name stem
         --print-record        Output DNSKEY RR payload and DS record (for KSKs) in table
         --verify-ns [SERVER]  Query nameserver(s) for actually present keys. If no specific server given, query all NS set for each zone.
         --resolver ADDR[,ADDR]
